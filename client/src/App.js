@@ -23,6 +23,16 @@ import Notifications from "./pages/Notifications";
 
 import "./index.css";
 
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
@@ -51,35 +61,102 @@ function App() {
     <DataProvider>
       <Router>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          <Route path="/dashboard" element={<Dashboard {...themeProps} />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Dashboard {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/budget" element={<Budget {...themeProps} />} />
+          <Route
+            path="/budget"
+            element={
+              <ProtectedRoute>
+                <Budget {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/categories" element={<Categories {...themeProps} />} />
+          <Route
+            path="/categories"
+            element={
+              <ProtectedRoute>
+                <Categories {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/recurring" element={<Recurring {...themeProps} />} />
+          <Route
+            path="/recurring"
+            element={
+              <ProtectedRoute>
+                <Recurring {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/goals" element={<Goals {...themeProps} />} />
+          <Route
+            path="/goals"
+            element={
+              <ProtectedRoute>
+                <Goals {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/insights" element={<Insights {...themeProps} />} />
+          <Route
+            path="/insights"
+            element={
+              <ProtectedRoute>
+                <Insights {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/reports" element={<Reports {...themeProps} />} />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <Reports {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/activity" element={<Activity {...themeProps} />} />
+          <Route
+            path="/activity"
+            element={
+              <ProtectedRoute>
+                <Activity {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="/settings" element={<Settings {...themeProps} />} />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings {...themeProps} />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/notifications"
-            element={<Notifications {...themeProps} />}
+            element={
+              <ProtectedRoute>
+                <Notifications {...themeProps} />
+              </ProtectedRoute>
+            }
           />
 
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Router>
     </DataProvider>

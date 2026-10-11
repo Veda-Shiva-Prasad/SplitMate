@@ -1,14 +1,16 @@
 import axios from "axios";
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "https://splitmate-0a2j.onrender.com/api";
+
 const API = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://localhost:5000/api",
-  timeout: 15000,
+  baseURL: API_BASE_URL,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// Attach the saved authentication token to requests.
 API.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -23,25 +25,21 @@ API.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
-// Handle expired or invalid sessions.
 API.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const token = localStorage.getItem("token");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("userName");
+      localStorage.removeItem("userEmail");
 
-      if (token) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+      const isAuthPage = ["/login", "/register"].includes(
+        window.location.pathname,
+      );
 
-        // Redirect only if the user is not already on an auth page.
-        const isAuthPage = ["/login", "/register"].includes(
-          window.location.pathname,
-        );
-
-        if (!isAuthPage) {
-          window.location.replace("/login");
-        }
+      if (!isAuthPage) {
+        window.location.replace("/login");
       }
     }
 
