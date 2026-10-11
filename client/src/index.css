@@ -360,3 +360,13 @@ body {
     padding: 12px !important;
   }
 }
+
+@media (max-width: 760px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .settings-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}

@@ -1,276 +1,250 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import { Eye, EyeOff, Lock, Mail, User } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import API from "../utils/api";
+import { useData } from "../context/DataContext";
+import "./Auth.css";
 
-const Register = () => {
+function getSavedTheme() {
+  try {
+    return localStorage.getItem("splitmate-theme") === "dark"
+      ? "dark"
+      : "light";
+  } catch {
+    return "light";
+  }
+}
+
+export default function Register() {
+  const navigate = useNavigate();
+  const { refreshData } = useData();
+
+  const [theme, setTheme] = useState(getSavedTheme);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [isVisible, setIsVisible] = useState(false);
-  const navigate = useNavigate();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    setIsVisible(true);
-  }, []);
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("splitmate-theme", theme);
+    } catch {
+      // Theme still works for this page if storage is unavailable.
+    }
+  }, [theme]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      alert("Passwords do not match");
+    setError("");
+
+    if (!name.trim() || !email.trim() || !password || !confirmPassword) {
+      setError("Please complete all fields.");
       return;
     }
+
+    if (password.length < 6) {
+      setError("Your password must contain at least 6 characters.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Your passwords do not match.");
+      return;
+    }
+
     try {
-      const res = await API.post("/auth/register", {
-        name,
-        email,
+      setIsSubmitting(true);
+
+      const response = await API.post("/auth/register", {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
         password,
       });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("userName", res.data.user.name);
-      localStorage.setItem("userEmail", res.data.user.email);
-      alert("Registration Successful!");
-      navigate("/dashboard");
+
+      const data = response.data;
+
+      if (!data?.token || !data?.user) {
+        throw new Error(
+          "Registration succeeded without a complete login response. Please try logging in.",
+        );
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("userName", data.user.name || "");
+      localStorage.setItem("userEmail", data.user.email || "");
+
+      await refreshData();
+      navigate("/dashboard", { replace: true });
     } catch (err) {
-      alert(err.response?.data?.message || "Registration Failed");
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to create your account. Please try again.",
+      );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div style={styles.container}>
-      <style>{animations}</style>
-      <div
-        style={{
-          ...styles.card,
-          opacity: isVisible ? 1 : 0,
-          transform: isVisible ? "translateY(0)" : "translateY(30px)",
-          transition: "opacity 0.6s ease-out, transform 0.6s ease-out",
-        }}
-      >
-        <div className="animate-bounceIn">
-          <h2 style={styles.title}>Create Account</h2>
-          <p style={styles.subtitle}>Join SplitMate today</p>
-        </div>
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.inputGroup} className="animate-slideInLeft">
-            <label style={styles.label}>Full Name</label>
-            <div style={styles.inputWrapper}>
-              <User size={18} style={styles.icon} />
+    <main className="auth-page">
+      <header className="auth-topbar">
+        <Link to="/login" className="auth-brand" aria-label="SplitMate home">
+          <span className="auth-brand-mark">S</span>
+          <span>SplitMate</span>
+        </Link>
+
+        <button
+          type="button"
+          className="auth-theme-toggle"
+          onClick={() =>
+            setTheme((current) => (current === "light" ? "dark" : "light"))
+          }
+          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+          title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+        >
+          {theme === "light" ? "☾" : "☀"}
+        </button>
+      </header>
+
+      <section className="auth-layout">
+        <aside className="auth-visual">
+          <div className="auth-visual-content">
+            <span className="auth-eyebrow">✦ Your money, organized</span>
+            <h1>A better way to manage money together.</h1>
+            <p>
+              Create your account and bring your expenses, budgets, goals, and
+              settlements into one organized space.
+            </p>
+
+            <div className="auth-feature-list">
+              <div className="auth-feature">
+                <span className="auth-feature-icon">✓</span>
+                <span>One place for your expenses</span>
+              </div>
+              <div className="auth-feature">
+                <span className="auth-feature-icon">✓</span>
+                <span>Clear budgets and financial goals</span>
+              </div>
+              <div className="auth-feature">
+                <span className="auth-feature-icon">✓</span>
+                <span>A simple view of what you owe</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <section className="auth-form-panel">
+          <h2 className="auth-heading">Create your account</h2>
+          <p className="auth-subheading">
+            Join SplitMate and get your expenses organized.
+          </p>
+
+          {error && (
+            <div className="auth-error" role="alert">
+              {error}
+            </div>
+          )}
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <div className="auth-field">
+              <label htmlFor="register-name">Full name</label>
               <input
+                id="register-name"
+                className="auth-input"
                 type="text"
-                style={styles.input}
-                placeholder="John Doe"
+                placeholder="Enter your full name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
                 required
-                className="hover-lift"
+                disabled={isSubmitting}
               />
             </div>
-          </div>
-          <div style={styles.inputGroup} className="animate-slideInRight">
-            <label style={styles.label}>Email Address</label>
-            <div style={styles.inputWrapper}>
-              <Mail size={18} style={styles.icon} />
+
+            <div className="auth-field">
+              <label htmlFor="register-email">Email address</label>
               <input
+                id="register-email"
+                className="auth-input"
                 type="email"
-                style={styles.input}
-                placeholder="name@example.com"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
                 required
-                className="hover-lift"
+                disabled={isSubmitting}
               />
             </div>
-          </div>
-          <div style={styles.inputGroup} className="animate-slideInLeft">
-            <label style={styles.label}>Password</label>
-            <div style={styles.inputWrapper}>
-              <Lock size={18} style={styles.icon} />
-              <input
-                type={showPassword ? "text" : "password"}
-                style={styles.input}
-                placeholder="••••••••"
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="hover-lift"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={styles.eyeBtn}
-                className="hover-scale"
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
+
+            <div className="auth-field">
+              <label htmlFor="register-password">Password</label>
+              <div className="auth-input-wrap">
+                <input
+                  id="register-password"
+                  className="auth-input auth-input-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                  disabled={isSubmitting}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
-          </div>
-          <div style={styles.inputGroup} className="animate-slideInRight">
-            <label style={styles.label}>Confirm Password</label>
-            <div style={styles.inputWrapper}>
-              <Lock size={18} style={styles.icon} />
+
+            <div className="auth-field">
+              <label htmlFor="register-confirm-password">
+                Confirm password
+              </label>
               <input
+                id="register-confirm-password"
+                className="auth-input"
                 type={showPassword ? "text" : "password"}
-                style={styles.input}
-                placeholder="••••••••"
+                placeholder="Re-enter your password"
+                value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                autoComplete="new-password"
                 required
-                className="hover-lift"
+                disabled={isSubmitting}
               />
             </div>
-          </div>
-          <button type="submit" style={styles.button} className="hover-glow">
-            Sign Up
-          </button>
-        </form>
-        <p style={styles.footerText} className="animate-fadeIn">
-          Already have an account?{" "}
-          <Link to="/login" style={styles.link} className="hover-scale">
-            Sign In
-          </Link>
-        </p>
-      </div>
-    </div>
+
+            <button
+              type="submit"
+              className="auth-button"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Creating account..." : "Create account →"}
+            </button>
+          </form>
+
+          <p className="auth-footer">
+            Already have an account?{" "}
+            <Link to="/login" className="auth-link">
+              Sign in
+            </Link>
+          </p>
+
+          <p className="auth-security-note">
+            ♢ Create an account to access your personal SplitMate data.
+          </p>
+        </section>
+      </section>
+    </main>
   );
-};
-
-const animations = `
-  @keyframes gradientBG {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
-  @keyframes bounceIn {
-    0% { opacity: 0; transform: scale(0.3); }
-    50% { opacity: 0.9; transform: scale(1.05); }
-    80% { transform: scale(0.95); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-  .hover-lift {
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-  }
-  .hover-lift:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-  }
-  .hover-scale {
-    transition: transform 0.2s ease;
-  }
-  .hover-scale:hover {
-    transform: scale(1.05);
-  }
-  .hover-glow {
-    transition: all 0.3s ease;
-  }
-  .hover-glow:hover {
-    box-shadow: 0 15px 30px rgba(79, 70, 229, 0.4);
-    transform: translateY(-2px);
-  }
-  .animate-slideInLeft {
-    animation: slideInLeft 0.5s ease-out forwards;
-  }
-  .animate-slideInRight {
-    animation: slideInRight 0.5s ease-out forwards;
-  }
-  .animate-fadeIn {
-    animation: fadeIn 0.8s ease-out forwards;
-  }
-  .animate-bounceIn {
-    animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-  }
-  @keyframes slideInLeft {
-    from { opacity: 0; transform: translateX(-30px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes slideInRight {
-    from { opacity: 0; transform: translateX(30px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-`;
-
-const styles = {
-  container: {
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    minHeight: "100vh",
-    background: "linear-gradient(-45deg, #eef2ff, #e0e7ff, #f3f4f6)",
-    backgroundSize: "400% 400%",
-    animation: "gradientBG 10s ease infinite",
-  },
-  card: {
-    background: "white",
-    padding: "40px",
-    borderRadius: "28px",
-    boxShadow: "0 20px 50px rgba(79, 70, 229, 0.15)",
-    width: "100%",
-    maxWidth: "420px",
-    textAlign: "center",
-    border: "1px solid #fff",
-  },
-  title: {
-    color: "#4f46e5",
-    fontSize: "32px",
-    fontWeight: "900",
-    margin: "0 0 8px 0",
-    letterSpacing: "-1px",
-  },
-  subtitle: {
-    color: "#64748b",
-    marginBottom: "32px",
-    fontSize: "14px",
-    fontWeight: "500",
-  },
-  form: { display: "flex", flexDirection: "column", gap: "20px" },
-  inputGroup: { textAlign: "left" },
-  label: {
-    display: "block",
-    fontSize: "11px",
-    fontWeight: "800",
-    color: "#475569",
-    marginBottom: "8px",
-    textTransform: "uppercase",
-    letterSpacing: "1px",
-  },
-  inputWrapper: { position: "relative", display: "flex", alignItems: "center" },
-  icon: { position: "absolute", left: "14px", color: "#94a3b8" },
-  input: {
-    width: "100%",
-    padding: "14px 45px",
-    borderRadius: "14px",
-    border: "1.5px solid #e2e8f0",
-    fontSize: "15px",
-    outline: "none",
-    transition: "all 0.3s",
-  },
-  eyeBtn: {
-    position: "absolute",
-    right: "14px",
-    background: "none",
-    border: "none",
-    color: "#94a3b8",
-    cursor: "pointer",
-  },
-  button: {
-    padding: "16px",
-    backgroundColor: "#4f46e5",
-    color: "white",
-    border: "none",
-    borderRadius: "14px",
-    fontSize: "16px",
-    fontWeight: "800",
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(79, 70, 229, 0.3)",
-    transition: "all 0.3s",
-    marginTop: "10px",
-  },
-  footerText: { marginTop: "24px", fontSize: "14px", color: "#64748b" },
-  link: { color: "#4f46e5", fontWeight: "800", textDecoration: "none" },
-};
-
-export default Register;
+}

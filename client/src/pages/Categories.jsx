@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Edit2, Trash2, Plus, X } from "lucide-react";
+import { Trash2, Plus, X } from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -36,8 +36,14 @@ const categoryIcons = {
   Other: "📦",
 };
 
+const formatCurrency = (amount) =>
+  `₹${Number(amount || 0).toLocaleString("en-IN", {
+    maximumFractionDigits: 2,
+  })}`;
+
 const Categories = ({ isDarkMode, setIsDarkMode }) => {
-  const { transactions, refreshData } = useData();
+  const { transactions = [], refreshData } = useData();
+
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -47,76 +53,70 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
   });
   const [customCategories, setCustomCategories] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pageLoaded, setPageLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    setPageLoaded(true);
     fetchCustomCategories();
   }, []);
 
   const fetchCustomCategories = async () => {
     try {
-      const res = await API.get("/categories");
-      setCustomCategories(res.data);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
+      const response = await API.get("/categories");
+      setCustomCategories(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error("Error fetching categories:", err);
+      setError(
+        err.response?.data?.message || "Could not load custom categories.",
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // Filter transactions to the current calendar month.
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  const currentMonthTransactions = (transactions || []).filter((tx) => {
+    const rawDate = tx.rawDate || tx.date;
+    if (!rawDate) return false;
+
+    const date = new Date(rawDate);
+    if (Number.isNaN(date.getTime())) return false;
+
+    return (
+      date.getFullYear() === currentYear && date.getMonth() === currentMonth
+    );
+  });
+
   const categorySpending = {};
-  (transactions || []).forEach((tx) => {
-    if (tx?.category) {
-      categorySpending[tx.category] =
-        (categorySpending[tx.category] || 0) + Math.abs(tx.amount || 0);
-    }
+
+  currentMonthTransactions.forEach((tx) => {
+    const category = tx.category || "Other";
+    categorySpending[category] =
+      (categorySpending[category] || 0) + Math.abs(Number(tx.amount) || 0);
   });
 
   const allCategories = [
     ...Object.keys(CATEGORY_COLORS),
-    ...customCategories.map((c) => c.name),
+    ...customCategories.map((category) => category.name),
   ];
+
   const pieData = allCategories
-    .filter((cat) => categorySpending[cat] > 0)
-    .map((cat) => ({
-      name: cat,
-      value: categorySpending[cat],
-      color:
-        CATEGORY_COLORS[cat] ||
-        customCategories.find((c) => c.name === cat)?.color ||
-        "#94A3B8",
-      icon:
-        categoryIcons[cat] ||
-        customCategories.find((c) => c.name === cat)?.icon ||
-        "📦",
-    }));
+    .filter((category, index, list) => list.indexOf(category) === index)
+    .map((category) => {
+      const custom = customCategories.find((item) => item.name === category);
 
-  const handleAddCategory = async () => {
-    if (!form.name) return;
-    try {
-      await API.post("/categories", {
-        name: form.name,
-        limit: form.limit ? +form.limit : null,
-        color: form.color,
-        icon: form.icon || "📦",
-      });
-      setShowModal(false);
-      setForm({ name: "", limit: "", color: "#3B82F6", icon: "📦" });
-      fetchCustomCategories();
-    } catch (error) {
-      console.error("Error adding category:", error);
-    }
-  };
-
-  const handleDeleteCategory = async (name) => {
-    try {
-      await API.delete(`/categories/${name}`);
-      fetchCustomCategories();
-    } catch (error) {
-      console.error("Error deleting category:", error);
-    }
-  };
+      return {
+        name: category,
+        value: categorySpending[category] || 0,
+        color: CATEGORY_COLORS[category] || custom?.color || "#94A3B8",
+        icon: categoryIcons[category] || custom?.icon || "📦",
+      };
+    })
+    .filter((item) => item.value > 0);
 
   const theme = {
     bg: isDarkMode ? "#0A0F1E" : "#F1F5F9",
@@ -141,6 +141,67 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
     fontFamily: "'Inter', sans-serif",
   };
 
+  const handleAddCategory = async () => {
+    const name = form.name.trim();
+
+    if (!name) {
+      setError("Please enter a category name.");
+      return;
+    }
+
+    if (
+      form.limit &&
+      (!Number.isFinite(Number(form.limit)) || Number(form.limit) <= 0)
+    ) {
+      setError("Budget limit must be a positive number.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      await API.post("/categories", {
+        name,
+        limit: form.limit ? Number(form.limit) : null,
+        color: form.color,
+        icon: form.icon.trim() || "📦",
+      });
+
+      setShowModal(false);
+      setForm({
+        name: "",
+        limit: "",
+        color: "#3B82F6",
+        icon: "📦",
+      });
+
+      await fetchCustomCategories();
+      if (refreshData) await refreshData();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not add the category.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteCategory = async (category) => {
+    if (!window.confirm(`Delete the custom category "${category.name}"?`)) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await API.delete(`/categories/${encodeURIComponent(category.name)}`);
+
+      await fetchCustomCategories();
+      if (refreshData) await refreshData();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not delete the category.");
+    }
+  };
+
   if (loading) {
     return (
       <div
@@ -150,20 +211,169 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          color: theme.text,
+          fontFamily: "'Inter', sans-serif",
+        }}
+      >
+        Loading categories...
+      </div>
+    );
+  }
+
+  const cardStyle = {
+    backgroundColor: theme.card,
+    padding: "24px",
+    borderRadius: "20px",
+    border: `1px solid ${theme.border}`,
+    minWidth: 0,
+  };
+
+  const buttonStyle = {
+    background: theme.primary,
+    color: "#fff",
+    border: "none",
+    padding: "12px 18px",
+    borderRadius: "10px",
+    fontWeight: 700,
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  };
+
+  const renderCategoryCard = (category, isCustom = false) => {
+    const name = isCustom ? category.name : category;
+    const color = isCustom
+      ? category.color || "#94A3B8"
+      : CATEGORY_COLORS[category];
+    const icon = isCustom ? category.icon || "📦" : categoryIcons[category];
+    const spent = categorySpending[name] || 0;
+    const limit = Number(category.limit) || 0;
+    const percentage = limit > 0 ? Math.min((spent / limit) * 100, 100) : 0;
+
+    return (
+      <div
+        key={isCustom ? category._id || category.name : category}
+        style={{
+          ...cardStyle,
+          padding: "20px",
+          borderRadius: "16px",
         }}
       >
         <div
           style={{
-            color: theme.text,
-            fontSize: "18px",
-            fontFamily: "'Inter', sans-serif",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "14px",
           }}
         >
-          Loading categories...
+          <span style={{ fontSize: "30px" }}>{icon}</span>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
+              {name}
+            </h3>
+            <p
+              style={{
+                margin: "3px 0 0",
+                fontSize: "12px",
+                color: theme.secondary,
+              }}
+            >
+              {isCustom ? "Custom Category" : "Default Category"}
+            </p>
+          </div>
+
+          {isCustom && (
+            <button
+              type="button"
+              aria-label={`Delete ${name}`}
+              title={`Delete ${name}`}
+              onClick={() => handleDeleteCategory(category)}
+              style={{
+                background: "#F43F5E20",
+                border: "none",
+                color: "#F43F5E",
+                width: "34px",
+                height: "34px",
+                borderRadius: "8px",
+                cursor: "pointer",
+              }}
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
         </div>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "10px",
+          }}
+        >
+          <strong style={{ fontSize: "20px", color }}>
+            {formatCurrency(spent)}
+          </strong>
+          <span
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "8px",
+              background: color,
+              flexShrink: 0,
+            }}
+          />
+        </div>
+
+        {limit > 0 && (
+          <div style={{ marginTop: "14px" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "8px",
+                fontSize: "12px",
+                color: theme.secondary,
+                marginBottom: "6px",
+              }}
+            >
+              <span>Budget limit</span>
+              <span>{formatCurrency(limit)}</span>
+            </div>
+            <div
+              style={{
+                height: "6px",
+                background: theme.border,
+                borderRadius: "10px",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${percentage}%`,
+                  height: "100%",
+                  background: spent > limit ? "#F43F5E" : color,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        <p
+          style={{
+            margin: "12px 0 0",
+            fontSize: "12px",
+            color: theme.secondary,
+          }}
+        >
+          Spent in {now.toLocaleDateString("en-IN", { month: "long" })}
+        </p>
       </div>
     );
-  }
+  };
 
   return (
     <div
@@ -171,103 +381,100 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
         backgroundColor: theme.bg,
         minHeight: "100vh",
         color: theme.text,
-        opacity: pageLoaded ? 1 : 0,
-        transform: pageLoaded ? "translateY(0)" : "translateY(20px)",
-        transition: "opacity 0.5s ease-out, transform 0.5s ease-out",
         fontFamily: "'Inter', sans-serif",
       }}
     >
       <Navbar isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
-      <main style={{ padding: "36px 40px" }}>
+
+      <main style={{ padding: "32px clamp(16px, 3vw, 40px)" }}>
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "28px",
+            flexWrap: "wrap",
+            gap: "16px",
+            marginBottom: "24px",
           }}
         >
-          <div className="animate-fadeInUp">
-            <h1
-              style={{
-                fontSize: "28px",
-                fontWeight: "800",
-                margin: 0,
-                fontFamily: "'Inter', sans-serif",
-              }}
-            >
+          <div>
+            <h1 style={{ fontSize: "28px", fontWeight: 800, margin: 0 }}>
               Categories
             </h1>
             <p
               style={{
                 color: theme.secondary,
-                margin: "4px 0 0 0",
+                margin: "5px 0 0",
                 fontSize: "14px",
-                fontFamily: "'Inter', sans-serif",
               }}
             >
               Manage your expense categories
             </p>
           </div>
+
           <button
-            onClick={() => setShowModal(true)}
-            className="hover-glow"
-            style={{
-              backgroundColor: theme.primary,
-              color: "white",
-              border: "none",
-              padding: "12px 22px",
-              borderRadius: "12px",
-              fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              fontFamily: "'Inter', sans-serif",
+            type="button"
+            onClick={() => {
+              setError("");
+              setShowModal(true);
             }}
+            style={buttonStyle}
           >
             <Plus size={18} /> Add Category
           </button>
         </div>
 
+        {error && (
+          <div
+            role="alert"
+            style={{
+              padding: "12px 16px",
+              marginBottom: "18px",
+              borderRadius: "10px",
+              border: "1px solid #F43F5E55",
+              color: theme.text,
+              background: "#F43F5E12",
+            }}
+          >
+            {error}
+            <button
+              type="button"
+              onClick={() => setError("")}
+              style={{
+                float: "right",
+                border: 0,
+                background: "transparent",
+                color: theme.text,
+                cursor: "pointer",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(min(100%, 380px), 1fr))",
             gap: "24px",
-            marginBottom: "28px",
+            marginBottom: "24px",
           }}
         >
-          <div
-            className="animate-scaleIn"
-            style={{
-              backgroundColor: theme.card,
-              padding: "24px",
-              borderRadius: "20px",
-              border: `1px solid ${theme.border}`,
-            }}
-          >
-            <h3
-              style={{
-                margin: "0 0 20px 0",
-                fontWeight: "700",
-                fontFamily: "'Inter', sans-serif",
-              }}
-            >
-              Spending by Category
-            </h3>
+          <section style={cardStyle}>
+            <h3 style={{ margin: "0 0 20px" }}>Spending by Category</h3>
             <div style={{ height: "300px" }}>
               {pieData.length === 0 ? (
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                     height: "100%",
+                    display: "grid",
+                    placeItems: "center",
                     color: theme.secondary,
                   }}
                 >
-                  No spending data yet
+                  No expenses recorded this month.
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -276,63 +483,44 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
                       data={pieData}
                       cx="50%"
                       cy="50%"
-                      labelLine={false}
+                      outerRadius={85}
+                      dataKey="value"
+                      nameKey="name"
                       label={({ name, percent }) =>
                         `${name} (${(percent * 100).toFixed(0)}%)`
                       }
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
                     >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      {pieData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Pie>
                     <Tooltip
+                      formatter={(value) => [formatCurrency(value), "Spent"]}
                       contentStyle={{
                         backgroundColor: theme.card,
                         border: `1px solid ${theme.border}`,
                         borderRadius: "10px",
-                        fontFamily: "'Inter', sans-serif",
                       }}
-                      formatter={(v) => [`₹${v}`, "Spent"]}
                     />
                   </PieChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
+          </section>
 
-          <div
-            className="animate-scaleIn"
-            style={{
-              backgroundColor: theme.card,
-              padding: "24px",
-              borderRadius: "20px",
-              border: `1px solid ${theme.border}`,
-            }}
-          >
-            <h3
-              style={{
-                margin: "0 0 20px 0",
-                fontWeight: "700",
-                fontFamily: "'Inter', sans-serif",
-              }}
-            >
-              Category Comparison
-            </h3>
+          <section style={cardStyle}>
+            <h3 style={{ margin: "0 0 20px" }}>Category Comparison</h3>
             <div style={{ height: "300px" }}>
               {pieData.length === 0 ? (
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
                     height: "100%",
+                    display: "grid",
+                    placeItems: "center",
                     color: theme.secondary,
                   }}
                 >
-                  No spending data yet
+                  No expenses recorded this month.
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -346,273 +534,53 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
                       dataKey="name"
                       stroke={theme.secondary}
                       fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
                     />
                     <YAxis
                       stroke={theme.secondary}
                       fontSize={11}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(v) => `₹${v}`}
+                      tickFormatter={(value) => `₹${value}`}
                     />
                     <Tooltip
+                      formatter={(value) => [formatCurrency(value), "Spent"]}
                       contentStyle={{
                         backgroundColor: theme.card,
                         border: `1px solid ${theme.border}`,
                         borderRadius: "10px",
-                        fontFamily: "'Inter', sans-serif",
                       }}
-                      formatter={(v) => [`₹${v}`, "Spent"]}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      {pieData.map((entry) => (
+                        <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               )}
             </div>
-          </div>
+          </section>
         </div>
 
         <div
-          className="stagger-children"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: "20px",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
+            gap: "18px",
           }}
         >
-          {Object.keys(CATEGORY_COLORS).map((cat) => {
-            const spent = categorySpending[cat] || 0;
-            return (
-              <div
-                key={cat}
-                className="hover-lift"
-                style={{
-                  backgroundColor: theme.card,
-                  padding: "20px",
-                  borderRadius: "16px",
-                  border: `1px solid ${theme.border}`,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div style={{ fontSize: "32px" }}>{categoryIcons[cat]}</div>
-                  <div>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "16px",
-                        fontWeight: "800",
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      {cat}
-                    </h3>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "12px",
-                        color: theme.secondary,
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Default Category
-                    </p>
-                  </div>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "20px",
-                      fontWeight: "800",
-                      color: CATEGORY_COLORS[cat],
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    ₹{spent.toLocaleString("en-IN")}
-                  </span>
-                  <div
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "8px",
-                      background: CATEGORY_COLORS[cat],
-                    }}
-                  />
-                </div>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: "12px",
-                    color: theme.secondary,
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                >
-                  Total spent this month
-                </p>
-              </div>
-            );
-          })}
+          {Object.keys(CATEGORY_COLORS).map((category) =>
+            renderCategoryCard(category),
+          )}
 
-          {customCategories.map((cat) => {
-            const spent = categorySpending[cat.name] || 0;
-            return (
-              <div
-                key={cat._id}
-                className="hover-lift"
-                style={{
-                  backgroundColor: theme.card,
-                  padding: "20px",
-                  borderRadius: "16px",
-                  border: `1px solid ${theme.border}`,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <div style={{ fontSize: "32px" }}>{cat.icon || "📦"}</div>
-                  <div style={{ flex: 1 }}>
-                    <h3
-                      style={{
-                        margin: 0,
-                        fontSize: "16px",
-                        fontWeight: "800",
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      {cat.name}
-                    </h3>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "12px",
-                        color: theme.secondary,
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Custom Category
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteCategory(cat.name)}
-                    className="hover-scale"
-                    style={{
-                      background: "#F43F5E20",
-                      border: "none",
-                      color: "#F43F5E",
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "20px",
-                      fontWeight: "800",
-                      color: cat.color,
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    ₹{spent.toLocaleString("en-IN")}
-                  </span>
-                  <div
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "8px",
-                      background: cat.color,
-                    }}
-                  />
-                </div>
-                {cat.limit && (
-                  <div style={{ marginTop: "12px" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Budget Limit
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: "600",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        ₹{cat.limit.toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        height: "4px",
-                        background: theme.border,
-                        borderRadius: "4px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${Math.min((spent / cat.limit) * 100, 100)}%`,
-                          height: "100%",
-                          background: spent > cat.limit ? "#F43F5E" : cat.color,
-                          borderRadius: "4px",
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {customCategories.map((category) =>
+            renderCategoryCard(category, true),
+          )}
         </div>
       </main>
 
       {showModal && (
         <div
+          onClick={() => setShowModal(false)}
           style={{
             position: "fixed",
             inset: 0,
@@ -621,164 +589,142 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            padding: "16px",
             zIndex: 1000,
           }}
-          onClick={() => setShowModal(false)}
         >
           <div
-            className="animate-scaleIn"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-modal-title"
+            onClick={(event) => event.stopPropagation()}
             style={{
               background: theme.card,
-              borderRadius: "24px",
-              padding: "32px",
+              borderRadius: "20px",
+              padding: "28px",
               width: "420px",
-              maxWidth: "90%",
+              maxWidth: "100%",
               border: `1px solid ${theme.border}`,
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              boxSizing: "border-box",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                gap: "12px",
                 marginBottom: "24px",
               }}
             >
               <h3
-                style={{
-                  margin: 0,
-                  fontWeight: "800",
-                  fontSize: "20px",
-                  fontFamily: "'Inter', sans-serif",
-                }}
+                id="category-modal-title"
+                style={{ margin: 0, fontSize: "20px" }}
               >
                 Add Custom Category
               </h3>
               <button
+                type="button"
+                aria-label="Close dialog"
                 onClick={() => setShowModal(false)}
-                className="hover-scale"
                 style={{
-                  background: "none",
-                  border: "none",
+                  border: 0,
+                  background: "transparent",
                   color: theme.secondary,
                   cursor: "pointer",
-                  padding: "4px",
                 }}
               >
                 <X size={20} />
               </button>
             </div>
-            <div style={{ marginBottom: "20px" }}>
-              <label
-                style={{
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  marginBottom: "8px",
-                  display: "block",
-                  color: theme.secondary,
-                  fontFamily: "'Inter', sans-serif",
-                }}
+
+            <label>
+              <span
+                style={{ display: "block", fontSize: "13px", fontWeight: 700 }}
               >
                 Category Name
-              </label>
+              </span>
               <input
                 type="text"
+                maxLength={60}
                 placeholder="e.g. Travel"
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="hover-lift"
+                onChange={(event) =>
+                  setForm({ ...form, name: event.target.value })
+                }
                 style={inputStyle}
               />
-            </div>
-            <div style={{ marginBottom: "20px" }}>
-              <label
-                style={{
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  marginBottom: "8px",
-                  display: "block",
-                  color: theme.secondary,
-                  fontFamily: "'Inter', sans-serif",
-                }}
+            </label>
+
+            <label style={{ display: "block", marginTop: "18px" }}>
+              <span
+                style={{ display: "block", fontSize: "13px", fontWeight: 700 }}
               >
                 Budget Limit (Optional)
-              </label>
+              </span>
               <input
                 type="number"
+                min="1"
                 placeholder="e.g. 5000"
                 value={form.limit}
-                onChange={(e) => setForm({ ...form, limit: e.target.value })}
-                className="hover-lift"
+                onChange={(event) =>
+                  setForm({ ...form, limit: event.target.value })
+                }
                 style={inputStyle}
               />
-            </div>
-            <div style={{ marginBottom: "20px" }}>
-              <label
-                style={{
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  marginBottom: "8px",
-                  display: "block",
-                  color: theme.secondary,
-                  fontFamily: "'Inter', sans-serif",
-                }}
+            </label>
+
+            <label style={{ display: "block", marginTop: "18px" }}>
+              <span
+                style={{ display: "block", fontSize: "13px", fontWeight: 700 }}
               >
                 Color
-              </label>
+              </span>
               <input
                 type="color"
                 value={form.color}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
+                onChange={(event) =>
+                  setForm({ ...form, color: event.target.value })
+                }
                 style={{
-                  width: "100%",
-                  height: "40px",
-                  borderRadius: "8px",
-                  marginTop: "8px",
+                  ...inputStyle,
+                  height: "48px",
+                  padding: "5px",
                   cursor: "pointer",
                 }}
               />
-            </div>
-            <div style={{ marginBottom: "24px" }}>
-              <label
-                style={{
-                  fontSize: "13px",
-                  fontWeight: "700",
-                  marginBottom: "8px",
-                  display: "block",
-                  color: theme.secondary,
-                  fontFamily: "'Inter', sans-serif",
-                }}
+            </label>
+
+            <label style={{ display: "block", marginTop: "18px" }}>
+              <span
+                style={{ display: "block", fontSize: "13px", fontWeight: 700 }}
               >
-                Icon
-              </label>
+                Icon (Emoji)
+              </span>
               <input
                 type="text"
+                maxLength={8}
                 placeholder="e.g. ✈️"
                 value={form.icon}
-                onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                className="hover-lift"
+                onChange={(event) =>
+                  setForm({ ...form, icon: event.target.value })
+                }
                 style={inputStyle}
               />
-            </div>
+            </label>
+
             <button
+              type="button"
+              disabled={saving}
               onClick={handleAddCategory}
-              className="hover-glow"
               style={{
+                ...buttonStyle,
                 width: "100%",
-                background: theme.primary,
-                color: "white",
-                border: "none",
-                padding: "14px",
-                borderRadius: "12px",
-                fontWeight: "bold",
-                fontSize: "15px",
-                cursor: "pointer",
-                fontFamily: "'Inter', sans-serif",
+                marginTop: "24px",
+                opacity: saving ? 0.7 : 1,
               }}
             >
-              Add Category
+              {saving ? "Saving..." : "Add Category"}
             </button>
           </div>
         </div>

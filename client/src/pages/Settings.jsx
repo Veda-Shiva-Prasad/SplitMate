@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   User,
   Lock,
@@ -6,25 +6,52 @@ import {
   Database,
   Info,
   Upload,
-  Trash2,
   Download,
   Save,
+  Trash2,
+  Moon,
+  Sun,
 } from "lucide-react";
+
 import Navbar from "../components/Navbar.jsx";
 import API from "../utils/api";
 import { useData } from "../context/DataContext";
 
+const DEFAULT_PREFS = {
+  currency: "₹ INR",
+  language: "English",
+  dateFormat: "DD/MM/YYYY",
+};
+
+const DEFAULT_NOTIFICATIONS = {
+  budget: true,
+  recurring: true,
+  goals: true,
+  email: false,
+};
+
+const readStoredObject = (key, fallback) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key));
+    return value && typeof value === "object" ? value : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const Settings = ({ isDarkMode, setIsDarkMode }) => {
   const { transactions, refreshData } = useData();
-  const [activeSection, setActiveSection] = useState("Profile");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [savedMsg, setSavedMsg] = useState("✓ Changes saved!");
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [pageLoaded, setPageLoaded] = useState(false);
+
   const photoInputRef = useRef(null);
   const importInputRef = useRef(null);
+  const toastTimerRef = useRef(null);
+
+  const [activeSection, setActiveSection] = useState("Profile");
+  const [savedMessage, setSavedMessage] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [passwordMessage, setPasswordMessage] = useState("");
 
   const [profile, setProfile] = useState({
     name: localStorage.getItem("userName") || "User",
@@ -32,1328 +59,1067 @@ const Settings = ({ isDarkMode, setIsDarkMode }) => {
     phone: localStorage.getItem("userPhone") || "",
   });
 
-  const [prefs, setPrefs] = useState({
-    currency: "₹ INR",
-    language: "English",
-    dateFormat: "DD/MM/YYYY",
-    theme: isDarkMode ? "Dark" : "Light",
-  });
-  const [notifs, setNotifs] = useState({
-    budget: true,
-    recurring: true,
-    goals: false,
-    email: false,
-  });
+  const [photoPreview, setPhotoPreview] = useState(
+    () => localStorage.getItem("userPhoto") || "",
+  );
+
+  const [prefs, setPrefs] = useState(() => ({
+    ...DEFAULT_PREFS,
+    ...readStoredObject("splitmate_preferences", {}),
+  }));
+
+  const [notifs, setNotifs] = useState(() => ({
+    ...DEFAULT_NOTIFICATIONS,
+    ...readStoredObject("splitmate_notification_preferences", {}),
+  }));
+
   const [passwords, setPasswords] = useState({
     current: "",
     newPass: "",
     confirm: "",
   });
-  const [pwError, setPwError] = useState("");
-
-  useEffect(() => {
-    setPageLoaded(true);
-  }, []);
-
-  useEffect(() => {
-    setPrefs({ ...prefs, theme: isDarkMode ? "Dark" : "Light" });
-  }, [isDarkMode]);
 
   const theme = {
-    bg: isDarkMode ? "#0A0F1E" : "#F1F5F9",
-    card: isDarkMode ? "#111827" : "#FFFFFF",
-    border: isDarkMode ? "#1E2D45" : "#E2E8F0",
-    text: isDarkMode ? "#F1F5F9" : "#1E293B",
-    secondary: isDarkMode ? "#94A3B8" : "#64748B",
-    primary: "#3B82F6",
+    bg: isDarkMode ? "#0a0f1e" : "#f1f5f9",
+    card: isDarkMode ? "#111827" : "#ffffff",
+    border: isDarkMode ? "#26334b" : "#e2e8f0",
+    text: isDarkMode ? "#f1f5f9" : "#1e293b",
+    secondary: isDarkMode ? "#94a3b8" : "#64748b",
+    primary: "#3b82f6",
+    danger: "#ef4444",
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  const showSaved = (message = "Changes saved successfully.") => {
+    setSavedMessage(message);
+
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = setTimeout(() => {
+      setSavedMessage("");
+    }, 3000);
   };
 
   const inputStyle = {
     width: "100%",
-    padding: "12px 16px",
-    background: theme.bg,
-    border: `1px solid ${theme.border}`,
-    borderRadius: "12px",
-    color: theme.text,
-    fontSize: "14px",
-    outline: "none",
     boxSizing: "border-box",
-    marginTop: "8px",
-    fontFamily: "'Inter', sans-serif",
+    marginTop: 7,
+    padding: "12px 14px",
+    borderRadius: 10,
+    border: `1px solid ${theme.border}`,
+    background: theme.bg,
+    color: theme.text,
+    fontSize: 14,
+    outline: "none",
   };
 
-  const showSaved = (msg = "✓ Changes saved!") => {
-    setSavedMsg(msg);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const buttonStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "11px 16px",
+    border: 0,
+    borderRadius: 10,
+    background: theme.primary,
+    color: "#ffffff",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: 13,
   };
 
-  const handleSaveProfile = () => {
-    localStorage.setItem("userName", profile.name);
-    localStorage.setItem("userEmail", profile.email);
-    localStorage.setItem("userPhone", profile.phone);
-    showSaved("✓ Profile saved!");
+  const cardStyle = {
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
+    borderRadius: 16,
+    overflow: "hidden",
+    minWidth: 0,
   };
 
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert("File too large. Max 5MB.");
+  const saveProfile = () => {
+    const name = profile.name.trim();
+    const email = profile.email.trim();
+
+    if (!name || !email) {
+      alert("Please enter your name and email address.");
       return;
     }
+
+    try {
+      localStorage.setItem("userName", name);
+      localStorage.setItem("userEmail", email);
+      localStorage.setItem("userPhone", profile.phone.trim());
+
+      setProfile({ ...profile, name, email });
+
+      window.dispatchEvent(new Event("splitmate-profile-updated"));
+      showSaved("Profile updated successfully.");
+    } catch (error) {
+      console.error("Profile save failed:", error);
+      alert("Could not save your profile. Please check browser storage.");
+    }
+  };
+
+  const handlePhotoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Please select an image smaller than 2MB.");
+      event.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setPhotoPreview(ev.target.result);
-      localStorage.setItem("userPhoto", ev.target.result);
-      showSaved("✓ Photo updated!");
+
+    reader.onload = () => {
+      try {
+        const photo = reader.result;
+
+        localStorage.setItem("userPhoto", photo);
+        setPhotoPreview(photo);
+        window.dispatchEvent(new Event("splitmate-profile-updated"));
+
+        showSaved("Profile photo updated.");
+      } catch (error) {
+        console.error("Photo save failed:", error);
+        alert("Could not save the image. Please try a smaller image.");
+      } finally {
+        event.target.value = "";
+      }
     };
+
+    reader.onerror = () => {
+      alert("Unable to read the selected image.");
+      event.target.value = "";
+    };
+
     reader.readAsDataURL(file);
   };
 
-  const handlePasswordChange = () => {
-    if (!passwords.current || !passwords.newPass || !passwords.confirm) {
-      setPwError("Please fill all fields.");
-      return;
-    }
-    if (passwords.newPass !== passwords.confirm) {
-      setPwError("Passwords do not match.");
-      return;
-    }
-    if (passwords.newPass.length < 6) {
-      setPwError("Password must be at least 6 characters.");
-      return;
-    }
-    setPwError("");
-    setPasswords({ current: "", newPass: "", confirm: "" });
-    showSaved("✓ Password updated!");
-  };
-
-  const handleExportCSV = () => {
-    if (!transactions || transactions.length === 0) {
-      alert("No transactions to export.");
-      return;
-    }
-    const headers = ["Name", "Category", "Amount", "Date"];
-    const rows = transactions.map((tx) => [
-      tx.name || tx.description,
-      tx.category,
-      Math.abs(tx.amount || 0),
-      tx.date,
-    ]);
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `splitmate_transactions_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showSaved("✓ CSV downloaded!");
-  };
-
-  const handleExportJSON = async () => {
+  const savePreferences = () => {
     try {
-      const goalsRes = await API.get("/goals");
-      const budgetsRes = await API.get("/budgets");
-      const owedRes = await API.get("/owed");
-      const exportData = {
+      localStorage.setItem("splitmate_preferences", JSON.stringify(prefs));
+      showSaved("App preferences saved.");
+    } catch (error) {
+      console.error("Preference save failed:", error);
+      alert("Could not save preferences.");
+    }
+  };
+
+  const updateNotificationPreference = (key, checked) => {
+    const next = { ...notifs, [key]: checked };
+
+    setNotifs(next);
+
+    try {
+      localStorage.setItem(
+        "splitmate_notification_preferences",
+        JSON.stringify(next),
+      );
+    } catch (error) {
+      console.error("Notification preference save failed:", error);
+      alert("Could not save notification preferences.");
+    }
+  };
+
+  const updateThemePreference = (value) => {
+    if (value === "Dark") setIsDarkMode(true);
+    if (value === "Light") setIsDarkMode(false);
+
+    setPrefs((previous) => ({ ...previous, theme: value }));
+  };
+
+  const exportCSV = () => {
+    if (!transactions.length) {
+      alert("There are no transactions to export.");
+      return;
+    }
+
+    const headers = ["Description", "Category", "Amount", "Date"];
+
+    const escapeCSV = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+    const rows = transactions.map((tx) => [
+      tx.name || tx.description || "",
+      tx.category || "Other",
+      Math.abs(Number(tx.amount) || 0),
+      tx.rawDate || tx.date || "",
+    ]);
+
+    const csv = [
+      headers.map(escapeCSV).join(","),
+      ...rows.map((row) => row.map(escapeCSV).join(",")),
+    ].join("\r\n");
+
+    downloadFile(
+      csv,
+      `splitmate_transactions_${new Date().toISOString().slice(0, 10)}.csv`,
+      "text/csv;charset=utf-8;",
+    );
+
+    showSaved("CSV export downloaded.");
+  };
+
+  const exportJSON = async () => {
+    try {
+      setBusy(true);
+
+      const [goalsRes, budgetsRes, owedRes] = await Promise.all([
+        API.get("/goals"),
+        API.get("/budgets"),
+        API.get("/owed"),
+      ]);
+
+      const backup = {
+        exportedAt: new Date().toISOString(),
         transactions,
         goals: goalsRes.data,
         budgets: budgetsRes.data,
         owed: owedRes.data,
-        profile: {
-          name: profile.name,
-          email: profile.email,
-          phone: profile.phone,
-        },
-        prefs,
-        notifs,
+        profile,
+        preferences: prefs,
+        notificationPreferences: notifs,
       };
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `splitmate_backup_${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      showSaved("✓ JSON downloaded!");
+
+      downloadFile(
+        JSON.stringify(backup, null, 2),
+        `splitmate_backup_${new Date().toISOString().slice(0, 10)}.json`,
+        "application/json",
+      );
+
+      showSaved("JSON backup downloaded.");
     } catch (error) {
-      alert("Failed to export data");
+      console.error("JSON export failed:", error);
+      alert(
+        "Could not export data. Please check your connection and try again.",
+      );
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleImportCSV = (e) => {
-    const file = e.target.files[0];
+  const handleImportCSV = (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
+
     const reader = new FileReader();
-    reader.onload = (ev) => {
+
+    reader.onload = async () => {
       try {
-        const text = ev.target.result;
-        const lines = text.trim().split("\n").slice(1);
-        const categoryIcons = {
-          Food: "🍔",
-          Transport: "🚗",
-          Bills: "⚡",
-          Entertainment: "🎬",
-          Health: "💊",
-          Shopping: "🛒",
-          Other: "📦",
+        const text = String(reader.result || "");
+        const lines = text.split(/\r?\n/).filter((line) => line.trim());
+
+        if (lines.length < 2) {
+          alert("The CSV file has no transaction rows.");
+          return;
+        }
+
+        // This importer expects: Description, Category, Amount, Date.
+        // It supports quoted fields and escaped double quotes.
+        const parseLine = (line) => {
+          const values = [];
+          let value = "";
+          let quoted = false;
+
+          for (let i = 0; i < line.length; i += 1) {
+            const char = line[i];
+
+            if (char === '"' && quoted && line[i + 1] === '"') {
+              value += '"';
+              i += 1;
+            } else if (char === '"') {
+              quoted = !quoted;
+            } else if (char === "," && !quoted) {
+              values.push(value.trim());
+              value = "";
+            } else {
+              value += char;
+            }
+          }
+
+          values.push(value.trim());
+          return values;
         };
-        const imported = lines
-          .map((line, idx) => {
-            const parts = line.split(",");
-            const category = parts[1]?.trim() || "Other";
+
+        const headers = parseLine(lines[0]).map((header) =>
+          header.toLowerCase(),
+        );
+
+        const descriptionIndex = headers.findIndex((h) =>
+          ["description", "name"].includes(h),
+        );
+        const categoryIndex = headers.indexOf("category");
+        const amountIndex = headers.indexOf("amount");
+        const dateIndex = headers.indexOf("date");
+
+        if (descriptionIndex < 0 || amountIndex < 0) {
+          alert(
+            "CSV headers must include Description (or Name) and Amount. Category and Date are recommended.",
+          );
+          return;
+        }
+
+        const rows = lines.slice(1).map(parseLine);
+
+        const imported = rows
+          .map((parts) => {
+            const amount = Number(parts[amountIndex]);
+            const description = parts[descriptionIndex]?.trim();
+
             return {
-              description:
-                parts[0]?.replace(/"/g, "").trim() || `Imported ${idx + 1}`,
-              amount: parseFloat(parts[2]) || 0,
-              category,
-              date: parts[3]?.trim() || new Date().toISOString().split("T")[0],
-              icon: categoryIcons[category] || "📦",
+              description,
+              amount: Math.abs(amount),
+              category:
+                categoryIndex >= 0 ? parts[categoryIndex] || "Other" : "Other",
+              date:
+                dateIndex >= 0 && parts[dateIndex]
+                  ? parts[dateIndex]
+                  : new Date().toISOString().slice(0, 10),
             };
           })
-          .filter((e) => e.description && !isNaN(e.amount) && e.amount > 0);
+          .filter(
+            (tx) =>
+              tx.description && Number.isFinite(tx.amount) && tx.amount > 0,
+          );
 
-        Promise.all(imported.map((tx) => API.post("/expenses", tx))).then(
-          () => {
-            refreshData();
-            showSaved(`✓ ${imported.length} transactions imported!`);
-          },
+        if (!imported.length) {
+          alert("No valid transactions were found in the CSV.");
+          return;
+        }
+
+        setBusy(true);
+
+        // Import in sequence to avoid sending too many requests at once.
+        for (const transaction of imported) {
+          await API.post("/expenses", transaction);
+        }
+
+        await refreshData();
+        showSaved(`${imported.length} transactions imported.`);
+      } catch (error) {
+        console.error("CSV import failed:", error);
+        alert(
+          "Import was interrupted. Some transactions may already have been imported. Check your transactions before retrying.",
         );
-        e.target.value = "";
-      } catch {
-        alert("Failed to parse CSV. Please use the correct format.");
+      } finally {
+        setBusy(false);
+        event.target.value = "";
       }
     };
+
+    reader.onerror = () => {
+      alert("Unable to read this CSV file.");
+      event.target.value = "";
+    };
+
     reader.readAsText(file);
   };
 
-  const handleClearAll = async () => {
+  const clearTransactions = async () => {
     try {
-      const expenses = await API.get("/expenses");
-      await Promise.all(
-        expenses.data.map((tx) => API.delete(`/expenses/${tx.id || tx._id}`)),
-      );
-      refreshData();
-      setShowClearConfirm(false);
-      showSaved("✓ All transactions cleared!");
+      setBusy(true);
+
+      const response = await API.get("/expenses");
+      const expenses = Array.isArray(response.data) ? response.data : [];
+
+      for (const tx of expenses) {
+        const id = tx.id || tx._id;
+
+        if (id) {
+          await API.delete(`/expenses/${id}`);
+        }
+      }
+
+      await refreshData();
+      setClearConfirm(false);
+      showSaved("Transactions cleared.");
     } catch (error) {
-      alert("Failed to clear transactions");
+      console.error("Clear transactions failed:", error);
+      alert("Could not clear all transactions. Please try again.");
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const validatePasswordForm = () => {
+    if (!passwords.current || !passwords.newPass || !passwords.confirm) {
+      setPasswordMessage("Please complete all password fields.");
+      return;
+    }
+
+    if (passwords.newPass.length < 8) {
+      setPasswordMessage("Your new password must be at least 8 characters.");
+      return;
+    }
+
+    if (passwords.newPass !== passwords.confirm) {
+      setPasswordMessage("The new passwords do not match.");
+      return;
+    }
+
+    setPasswordMessage(
+      "Password changes are not connected to the backend yet. No password was changed.",
+    );
   };
 
   const sections = [
     { label: "Profile", icon: User },
     { label: "Account", icon: Lock },
-    { label: "Preferences", icon: "⚙️" },
+    { label: "Preferences", icon: isDarkMode ? Moon : Sun },
     { label: "Notifications", icon: Bell },
     { label: "Data", icon: Database },
     { label: "About", icon: Info },
   ];
 
-  const Toggle = ({ on, onToggle }) => (
-    <div
-      onClick={onToggle}
-      className="hover-scale"
+  const Field = ({ label, children }) => (
+    <label
       style={{
-        width: "46px",
-        height: "24px",
-        borderRadius: "12px",
-        background: on ? theme.primary : theme.border,
-        cursor: "pointer",
-        position: "relative",
-        transition: "background 0.2s",
-        flexShrink: 0,
+        display: "block",
+        minWidth: 0,
+        fontSize: 13,
+        color: theme.secondary,
+        fontWeight: 700,
       }}
     >
-      <div
-        style={{
-          width: "18px",
-          height: "18px",
-          borderRadius: "50%",
-          background: "white",
-          position: "absolute",
-          top: "3px",
-          left: on ? "25px" : "3px",
-          transition: "left 0.2s",
-        }}
-      />
-    </div>
-  );
-
-  const Section = ({ children }) => (
-    <div
-      style={{
-        backgroundColor: theme.card,
-        borderRadius: "20px",
-        border: `1px solid ${theme.border}`,
-        overflow: "hidden",
-      }}
-    >
+      {label}
       {children}
-    </div>
+    </label>
   );
 
-  const SectionHeader = ({ title, sub }) => (
-    <div
-      style={{
-        padding: "24px 28px",
-        borderBottom: `1px solid ${theme.border}`,
-      }}
-    >
-      <h3
+  const Panel = ({ title, subtitle, children }) => (
+    <section style={cardStyle}>
+      <header
         style={{
-          margin: 0,
-          fontWeight: "800",
-          fontSize: "17px",
-          fontFamily: "'Inter', sans-serif",
+          padding: "22px 24px",
+          borderBottom: `1px solid ${theme.border}`,
         }}
       >
-        {title}
-      </h3>
-      {sub && (
-        <p
-          style={{
-            margin: "4px 0 0 0",
-            fontSize: "13px",
-            color: theme.secondary,
-            fontFamily: "'Inter', sans-serif",
-          }}
-        >
-          {sub}
-        </p>
-      )}
-    </div>
+        <h2 style={{ fontSize: 17, margin: 0, fontWeight: 800 }}>{title}</h2>
+        {subtitle && (
+          <p
+            style={{ color: theme.secondary, fontSize: 13, margin: "6px 0 0" }}
+          >
+            {subtitle}
+          </p>
+        )}
+      </header>
+      <div style={{ padding: 24 }}>{children}</div>
+    </section>
   );
 
   return (
     <div
       style={{
-        backgroundColor: theme.bg,
         minHeight: "100vh",
+        background: theme.bg,
         color: theme.text,
-        opacity: pageLoaded ? 1 : 0,
-        transform: pageLoaded ? "translateY(0)" : "translateY(20px)",
-        transition: "opacity 0.5s ease-out, transform 0.5s ease-out",
         fontFamily: "'Inter', sans-serif",
       }}
     >
       <Navbar isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
 
-      {saved && (
+      {savedMessage && (
         <div
-          className="animate-pulse"
+          role="status"
           style={{
             position: "fixed",
-            top: "90px",
-            right: "32px",
-            background: "#10B981",
-            color: "white",
-            padding: "12px 24px",
-            borderRadius: "12px",
-            fontWeight: "700",
+            right: 20,
+            top: 85,
             zIndex: 500,
-            boxShadow: "0 8px 24px rgba(16,185,129,0.3)",
-            fontFamily: "'Inter', sans-serif",
+            padding: "13px 18px",
+            borderRadius: 12,
+            color: "#ffffff",
+            background: "#059669",
+            boxShadow: "0 8px 24px #0002",
+            maxWidth: "calc(100vw - 40px)",
           }}
         >
-          {savedMsg}
+          {savedMessage}
         </div>
       )}
 
-      <main style={{ padding: "36px 40px" }}>
-        <div className="animate-fadeInUp" style={{ marginBottom: "28px" }}>
-          <h1
-            style={{
-              fontSize: "28px",
-              fontWeight: "800",
-              margin: 0,
-              fontFamily: "'Inter', sans-serif",
-            }}
-          >
-            Settings
-          </h1>
-          <p
-            style={{
-              color: theme.secondary,
-              margin: "4px 0 0 0",
-              fontSize: "14px",
-              fontFamily: "'Inter', sans-serif",
-            }}
-          >
-            Manage your account and app preferences
+      <main
+        style={{
+          maxWidth: 1200,
+          margin: "0 auto",
+          padding: "32px 20px 48px",
+        }}
+      >
+        <div style={{ marginBottom: 24 }}>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 850 }}>Settings</h1>
+          <p style={{ color: theme.secondary, marginTop: 7 }}>
+            Manage your profile, preferences, notifications, and data.
           </p>
         </div>
 
         <div
+          className="settings-layout"
           style={{
             display: "grid",
-            gridTemplateColumns: "240px 1fr",
-            gap: "28px",
+            gridTemplateColumns: "230px minmax(0, 1fr)",
+            gap: 22,
             alignItems: "start",
           }}
         >
-          <div
+          <aside
             style={{
-              backgroundColor: theme.card,
-              borderRadius: "20px",
-              border: `1px solid ${theme.border}`,
-              padding: "8px",
+              ...cardStyle,
+              padding: 8,
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
             }}
           >
             {sections.map(({ label, icon: Icon }) => (
               <button
                 key={label}
+                type="button"
                 onClick={() => setActiveSection(label)}
-                className="hover-lift"
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "10px",
+                  gap: 10,
                   width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  border: 0,
                   background:
                     activeSection === label
                       ? `${theme.primary}20`
                       : "transparent",
                   color:
                     activeSection === label ? theme.primary : theme.secondary,
-                  border: "none",
-                  padding: "12px 16px",
-                  borderRadius: "10px",
-                  cursor: "pointer",
-                  fontWeight: "700",
-                  fontSize: "14px",
+                  fontWeight: 700,
                   textAlign: "left",
-                  marginBottom: "2px",
-                  transition: "all 0.15s",
-                  fontFamily: "'Inter', sans-serif",
+                  cursor: "pointer",
                 }}
               >
-                {typeof Icon === "string" ? (
-                  <span>{Icon}</span>
-                ) : (
-                  <Icon size={16} />
-                )}
+                <Icon size={17} />
                 {label}
               </button>
             ))}
-          </div>
+          </aside>
 
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: "20px" }}
-          >
+          <div style={{ display: "grid", gap: 20, minWidth: 0 }}>
             {activeSection === "Profile" && (
-              <Section>
-                <SectionHeader
-                  title="Profile Information"
-                  sub="Update your personal details"
-                />
-                <div style={{ padding: "28px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "20px",
-                      marginBottom: "28px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "80px",
-                        height: "80px",
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg, #3B82F6, #8B5CF6)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                        fontSize: "28px",
-                        fontWeight: "900",
-                        overflow: "hidden",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {photoPreview ? (
-                        <img
-                          src={photoPreview}
-                          alt="avatar"
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      ) : (
-                        profile.name.charAt(0).toUpperCase()
-                      )}
-                    </div>
-                    <div>
-                      <input
-                        type="file"
-                        ref={photoInputRef}
-                        accept="image/*"
-                        onChange={handlePhotoUpload}
-                        style={{ display: "none" }}
-                      />
-                      <button
-                        onClick={() => photoInputRef.current.click()}
-                        className="hover-glow"
-                        style={{
-                          background: `${theme.primary}20`,
-                          color: theme.primary,
-                          border: `1px solid ${theme.primary}40`,
-                          padding: "8px 16px",
-                          borderRadius: "10px",
-                          cursor: "pointer",
-                          fontWeight: "700",
-                          fontSize: "13px",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        <Upload size={14} /> Upload Photo
-                      </button>
-                      <p
-                        style={{
-                          margin: "6px 0 0 0",
-                          fontSize: "12px",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        JPG, PNG up to 5MB
-                      </p>
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "16px",
-                      marginBottom: "16px",
-                    }}
-                  >
-                    {[
-                      { label: "Full Name", key: "name", type: "text" },
-                      { label: "Phone Number", key: "phone", type: "tel" },
-                    ].map((f) => (
-                      <div key={f.key}>
-                        <label
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: "700",
-                            color: theme.secondary,
-                            fontFamily: "'Inter', sans-serif",
-                          }}
-                        >
-                          {f.label}
-                        </label>
-                        <input
-                          type={f.type}
-                          value={profile[f.key]}
-                          onChange={(e) =>
-                            setProfile({ ...profile, [f.key]: e.target.value })
-                          }
-                          className="hover-lift"
-                          style={inputStyle}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginBottom: "24px" }}>
-                    <label
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: "700",
-                        color: theme.secondary,
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) =>
-                        setProfile({ ...profile, email: e.target.value })
-                      }
-                      className="hover-lift"
-                      style={inputStyle}
-                    />
-                  </div>
-                  <button
-                    onClick={handleSaveProfile}
-                    className="hover-glow"
-                    style={{
-                      background: theme.primary,
-                      color: "white",
-                      border: "none",
-                      padding: "12px 28px",
-                      borderRadius: "12px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    <Save size={16} /> Save Profile
-                  </button>
-                </div>
-              </Section>
-            )}
-
-            {activeSection === "Account" && (
-              <Section>
-                <SectionHeader
-                  title="Account & Security"
-                  sub="Change your password or delete your account"
-                />
-                <div style={{ padding: "28px" }}>
-                  <h4
-                    style={{
-                      margin: "0 0 16px 0",
-                      fontWeight: "700",
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    Change Password
-                  </h4>
-                  {[
-                    { label: "Current Password", key: "current" },
-                    { label: "New Password", key: "newPass" },
-                    { label: "Confirm New Password", key: "confirm" },
-                  ].map((f) => (
-                    <div key={f.key} style={{ marginBottom: "14px" }}>
-                      <label
-                        style={{
-                          fontSize: "13px",
-                          fontWeight: "700",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        {f.label}
-                      </label>
-                      <input
-                        type="password"
-                        value={passwords[f.key]}
-                        onChange={(e) =>
-                          setPasswords({
-                            ...passwords,
-                            [f.key]: e.target.value,
-                          })
-                        }
-                        className="hover-lift"
-                        style={inputStyle}
-                        placeholder="••••••••"
-                      />
-                    </div>
-                  ))}
-                  {pwError && (
-                    <p
-                      style={{
-                        color: "#F43F5E",
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        margin: "0 0 12px 0",
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      {pwError}
-                    </p>
-                  )}
-                  <button
-                    onClick={handlePasswordChange}
-                    className="hover-glow"
-                    style={{
-                      background: theme.primary,
-                      color: "white",
-                      border: "none",
-                      padding: "12px 28px",
-                      borderRadius: "12px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      marginBottom: "32px",
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    Update Password
-                  </button>
-                  <div
-                    style={{
-                      borderTop: `1px solid ${theme.border}`,
-                      paddingTop: "24px",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 8px 0",
-                        fontWeight: "700",
-                        color: "#F43F5E",
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Danger Zone
-                    </h4>
-                    <p
-                      style={{
-                        margin: "0 0 16px 0",
-                        fontSize: "13px",
-                        color: theme.secondary,
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Once deleted, your account cannot be recovered.
-                    </p>
-                    {showDeleteConfirm ? (
-                      <div
-                        style={{
-                          background: "#F43F5E15",
-                          border: "1px solid #F43F5E40",
-                          padding: "16px",
-                          borderRadius: "12px",
-                        }}
-                      >
-                        <p
-                          style={{
-                            margin: "0 0 12px 0",
-                            fontWeight: "600",
-                            color: "#F43F5E",
-                            fontFamily: "'Inter', sans-serif",
-                          }}
-                        >
-                          Are you sure? This action is irreversible.
-                        </p>
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            className="hover-glow"
-                            style={{
-                              background: "#F43F5E",
-                              color: "white",
-                              border: "none",
-                              padding: "10px 20px",
-                              borderRadius: "10px",
-                              cursor: "pointer",
-                              fontWeight: "700",
-                              fontFamily: "'Inter', sans-serif",
-                            }}
-                          >
-                            Yes, Delete Account
-                          </button>
-                          <button
-                            onClick={() => setShowDeleteConfirm(false)}
-                            className="hover-scale"
-                            style={{
-                              background: theme.border,
-                              color: theme.secondary,
-                              border: "none",
-                              padding: "10px 20px",
-                              borderRadius: "10px",
-                              cursor: "pointer",
-                              fontWeight: "700",
-                              fontFamily: "'Inter', sans-serif",
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowDeleteConfirm(true)}
-                        className="hover-glow"
-                        style={{
-                          background: "#F43F5E20",
-                          color: "#F43F5E",
-                          border: "1px solid #F43F5E40",
-                          padding: "10px 20px",
-                          borderRadius: "10px",
-                          cursor: "pointer",
-                          fontWeight: "700",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        <Trash2 size={15} /> Delete My Account
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </Section>
-            )}
-
-            {activeSection === "Preferences" && (
-              <Section>
-                <SectionHeader
-                  title="App Preferences"
-                  sub="Customize your SplitMate experience"
-                />
-                <div style={{ padding: "28px" }}>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
-                      gap: "16px",
-                    }}
-                  >
-                    {[
-                      {
-                        label: "Currency",
-                        key: "currency",
-                        options: ["₹ INR", "$ USD", "€ EUR", "£ GBP"],
-                      },
-                      {
-                        label: "Language",
-                        key: "language",
-                        options: ["English", "Telugu", "Hindi", "Tamil"],
-                      },
-                      {
-                        label: "Date Format",
-                        key: "dateFormat",
-                        options: ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"],
-                      },
-                      {
-                        label: "Theme",
-                        key: "theme",
-                        options: ["Dark", "Light", "System"],
-                      },
-                    ].map((f) => (
-                      <div key={f.key}>
-                        <label
-                          style={{
-                            fontSize: "13px",
-                            fontWeight: "700",
-                            color: theme.secondary,
-                            fontFamily: "'Inter', sans-serif",
-                          }}
-                        >
-                          {f.label}
-                        </label>
-                        <select
-                          value={prefs[f.key]}
-                          onChange={(e) => {
-                            setPrefs({ ...prefs, [f.key]: e.target.value });
-                            if (f.key === "theme" && e.target.value === "Dark")
-                              setIsDarkMode(true);
-                            if (f.key === "theme" && e.target.value === "Light")
-                              setIsDarkMode(false);
-                          }}
-                          className="hover-lift"
-                          style={inputStyle}
-                        >
-                          {f.options.map((o) => (
-                            <option key={o}>{o}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => showSaved("✓ Preferences saved!")}
-                    className="hover-glow"
-                    style={{
-                      background: theme.primary,
-                      color: "white",
-                      border: "none",
-                      padding: "12px 28px",
-                      borderRadius: "12px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      marginTop: "24px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    <Save size={16} /> Save Preferences
-                  </button>
-                </div>
-              </Section>
-            )}
-
-            {activeSection === "Notifications" && (
-              <Section>
-                <SectionHeader
-                  title="Notification Settings"
-                  sub="Control what alerts you receive"
-                />
-                {[
-                  {
-                    key: "budget",
-                    label: "Budget Limit Alerts",
-                    sub: "Get notified when you're close to your budget limit",
-                  },
-                  {
-                    key: "recurring",
-                    label: "Recurring Payment Reminders",
-                    sub: "Get reminded 3 days before a recurring payment is due",
-                  },
-                  {
-                    key: "goals",
-                    label: "Goal Milestone Alerts",
-                    sub: "Celebrate when you hit 25%, 50%, 75%, and 100% of your goals",
-                  },
-                  {
-                    key: "email",
-                    label: "Email Notifications",
-                    sub: "Receive monthly summaries and important alerts via email",
-                  },
-                ].map((item, idx, arr) => (
-                  <div
-                    key={item.key}
-                    style={{
-                      padding: "20px 28px",
-                      borderBottom:
-                        idx < arr.length - 1
-                          ? `1px solid ${theme.border}`
-                          : "none",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontWeight: "700",
-                          fontSize: "14px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        {item.label}
-                      </p>
-                      <p
-                        style={{
-                          margin: "2px 0 0 0",
-                          fontSize: "12px",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        {item.sub}
-                      </p>
-                    </div>
-                    <Toggle
-                      on={notifs[item.key]}
-                      onToggle={() =>
-                        setNotifs({ ...notifs, [item.key]: !notifs[item.key] })
-                      }
-                    />
-                  </div>
-                ))}
-              </Section>
-            )}
-
-            {activeSection === "Data" && (
-              <Section>
-                <SectionHeader
-                  title="Data Management"
-                  sub="Export, import, or clear your financial data"
-                />
+              <Panel
+                title="Profile information"
+                subtitle="Update the details displayed in your account menu."
+              >
                 <div
                   style={{
-                    padding: "28px",
                     display: "flex",
-                    flexDirection: "column",
-                    gap: "16px",
+                    alignItems: "center",
+                    gap: 18,
+                    flexWrap: "wrap",
+                    marginBottom: 24,
                   }}
                 >
-                  <div
-                    className="hover-lift"
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "16px 20px",
-                      borderRadius: "12px",
-                      border: `1px solid ${theme.border}`,
-                      background: "#10B98106",
-                    }}
-                  >
-                    <div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontWeight: "700",
-                          fontSize: "14px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Export all data as CSV
-                      </p>
-                      <p
-                        style={{
-                          margin: "2px 0 0 0",
-                          fontSize: "12px",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Download a spreadsheet-compatible export — opens in
-                        Excel
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleExportCSV}
-                      className="hover-scale"
+                  {photoPreview ? (
+                    <img
+                      src={photoPreview}
+                      alt="Your profile"
                       style={{
-                        background: "#10B98120",
-                        color: "#10B981",
-                        border: "1px solid #10B98140",
-                        padding: "8px 16px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        fontWeight: "700",
-                        fontSize: "13px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        flexShrink: 0,
-                        fontFamily: "'Inter', sans-serif",
+                        width: 84,
+                        height: 84,
+                        borderRadius: "50%",
+                        objectFit: "cover",
+                        border: `2px solid ${theme.primary}`,
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 84,
+                        height: 84,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        background: "linear-gradient(135deg,#3b82f6,#8b5cf6)",
+                        color: "white",
+                        fontSize: 30,
+                        fontWeight: 800,
                       }}
                     >
-                      <Download size={14} /> Export CSV
-                    </button>
-                  </div>
-                  <div
-                    className="hover-lift"
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "16px 20px",
-                      borderRadius: "12px",
-                      border: `1px solid ${theme.border}`,
-                      background: "#3B82F606",
-                    }}
-                  >
-                    <div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontWeight: "700",
-                          fontSize: "14px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Export all data as JSON
-                      </p>
-                      <p
-                        style={{
-                          margin: "2px 0 0 0",
-                          fontSize: "12px",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Download a complete backup of your SplitMate data
-                      </p>
+                      {(profile.name.charAt(0) || "U").toUpperCase()}
                     </div>
-                    <button
-                      onClick={handleExportJSON}
-                      className="hover-scale"
-                      style={{
-                        background: "#3B82F620",
-                        color: "#3B82F6",
-                        border: "1px solid #3B82F640",
-                        padding: "8px 16px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        fontWeight: "700",
-                        fontSize: "13px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        flexShrink: 0,
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      <Download size={14} /> Export JSON
-                    </button>
-                  </div>
-                  <div
-                    className="hover-lift"
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "16px 20px",
-                      borderRadius: "12px",
-                      border: `1px solid ${theme.border}`,
-                      background: "#F59E0B06",
-                    }}
-                  >
-                    <div>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontWeight: "700",
-                          fontSize: "14px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Import transactions from CSV
-                      </p>
-                      <p
-                        style={{
-                          margin: "2px 0 0 0",
-                          fontSize: "12px",
-                          color: theme.secondary,
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        Upload a CSV file to bulk-import your transactions
-                      </p>
-                    </div>
+                  )}
+
+                  <div>
                     <input
+                      ref={photoInputRef}
                       type="file"
-                      accept=".csv"
-                      ref={importInputRef}
-                      onChange={handleImportCSV}
+                      accept="image/*"
+                      onChange={handlePhotoUpload}
                       style={{ display: "none" }}
                     />
                     <button
-                      onClick={() => importInputRef.current.click()}
-                      className="hover-scale"
+                      type="button"
+                      style={buttonStyle}
+                      onClick={() => photoInputRef.current?.click()}
+                    >
+                      <Upload size={16} /> Upload photo
+                    </button>
+                    <p style={{ color: theme.secondary, fontSize: 12 }}>
+                      JPG, PNG, or another supported image type. Maximum 2MB.
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  className="settings-fields"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 18,
+                  }}
+                >
+                  <Field label="Full name">
+                    <input
+                      style={inputStyle}
+                      value={profile.name}
+                      onChange={(e) =>
+                        setProfile({ ...profile, name: e.target.value })
+                      }
+                      autoComplete="name"
+                    />
+                  </Field>
+
+                  <Field label="Phone number">
+                    <input
+                      style={inputStyle}
+                      type="tel"
+                      value={profile.phone}
+                      onChange={(e) =>
+                        setProfile({ ...profile, phone: e.target.value })
+                      }
+                      autoComplete="tel"
+                    />
+                  </Field>
+
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Field label="Email address">
+                      <input
+                        style={inputStyle}
+                        type="email"
+                        value={profile.email}
+                        onChange={(e) =>
+                          setProfile({ ...profile, email: e.target.value })
+                        }
+                        autoComplete="email"
+                      />
+                    </Field>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={saveProfile}
+                  style={{ ...buttonStyle, marginTop: 22 }}
+                >
+                  <Save size={16} /> Save profile
+                </button>
+              </Panel>
+            )}
+
+            {activeSection === "Account" && (
+              <Panel
+                title="Account and security"
+                subtitle="Password changes require a backend endpoint."
+              >
+                <h3 style={{ marginTop: 0, fontSize: 15 }}>Change password</h3>
+
+                {[
+                  { label: "Current password", key: "current" },
+                  { label: "New password", key: "newPass" },
+                  { label: "Confirm new password", key: "confirm" },
+                ].map((field) => (
+                  <div key={field.key} style={{ marginBottom: 15 }}>
+                    <Field label={field.label}>
+                      <input
+                        style={inputStyle}
+                        type="password"
+                        autoComplete="off"
+                        value={passwords[field.key]}
+                        onChange={(e) => {
+                          setPasswords({
+                            ...passwords,
+                            [field.key]: e.target.value,
+                          });
+                          setPasswordMessage("");
+                        }}
+                      />
+                    </Field>
+                  </div>
+                ))}
+
+                {passwordMessage && (
+                  <p style={{ color: theme.secondary, fontSize: 13 }}>
+                    {passwordMessage}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={validatePasswordForm}
+                  style={buttonStyle}
+                >
+                  Validate password form
+                </button>
+
+                <div
+                  style={{
+                    borderTop: `1px solid ${theme.border}`,
+                    marginTop: 28,
+                    paddingTop: 22,
+                  }}
+                >
+                  <h3 style={{ color: theme.danger, marginTop: 0 }}>
+                    Danger zone
+                  </h3>
+                  <p style={{ color: theme.secondary, fontSize: 13 }}>
+                    This action permanently deletes your expense records. It
+                    does not delete your account.
+                  </p>
+
+                  {!clearConfirm ? (
+                    <button
+                      type="button"
+                      onClick={() => setClearConfirm(true)}
                       style={{
-                        background: "#F59E0B20",
-                        color: "#F59E0B",
-                        border: "1px solid #F59E0B40",
-                        padding: "8px 16px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        fontWeight: "700",
-                        fontSize: "13px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        flexShrink: 0,
-                        fontFamily: "'Inter', sans-serif",
+                        ...buttonStyle,
+                        background: `${theme.danger}18`,
+                        color: theme.danger,
+                        border: `1px solid ${theme.danger}50`,
                       }}
                     >
-                      <Upload size={14} /> Import CSV
+                      <Trash2 size={16} /> Clear all transactions
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        padding: 16,
+                        borderRadius: 12,
+                        border: `1px solid ${theme.danger}70`,
+                      }}
+                    >
+                      <strong>Are you sure?</strong>
+                      <p style={{ color: theme.secondary, fontSize: 13 }}>
+                        Export a backup first if you need to keep these records.
+                      </p>
+                      <div
+                        style={{ display: "flex", gap: 10, flexWrap: "wrap" }}
+                      >
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={clearTransactions}
+                          style={{ ...buttonStyle, background: theme.danger }}
+                        >
+                          {busy ? "Working..." : "Yes, clear transactions"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setClearConfirm(false)}
+                          style={{
+                            ...buttonStyle,
+                            background: theme.border,
+                            color: theme.text,
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Panel>
+            )}
+
+            {activeSection === "Preferences" && (
+              <Panel
+                title="App preferences"
+                subtitle="Customize your local SplitMate experience."
+              >
+                <div
+                  className="settings-fields"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gap: 18,
+                  }}
+                >
+                  <Field label="Currency">
+                    <select
+                      style={inputStyle}
+                      value={prefs.currency}
+                      onChange={(e) =>
+                        setPrefs({ ...prefs, currency: e.target.value })
+                      }
+                    >
+                      {["₹ INR", "$ USD", "€ EUR", "£ GBP"].map((option) => (
+                        <option key={option}>{option}</option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Language">
+                    <select
+                      style={inputStyle}
+                      value={prefs.language}
+                      onChange={(e) =>
+                        setPrefs({ ...prefs, language: e.target.value })
+                      }
+                    >
+                      {["English", "Telugu", "Hindi", "Tamil"].map((option) => (
+                        <option key={option}>{option}</option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  <Field label="Date format">
+                    <select
+                      style={inputStyle}
+                      value={prefs.dateFormat}
+                      onChange={(e) =>
+                        setPrefs({ ...prefs, dateFormat: e.target.value })
+                      }
+                    >
+                      {["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"].map(
+                        (option) => (
+                          <option key={option}>{option}</option>
+                        ),
+                      )}
+                    </select>
+                  </Field>
+
+                  <Field label="Theme">
+                    <select
+                      style={inputStyle}
+                      value={isDarkMode ? "Dark" : "Light"}
+                      onChange={(e) => updateThemePreference(e.target.value)}
+                    >
+                      <option>Dark</option>
+                      <option>Light</option>
+                    </select>
+                  </Field>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={savePreferences}
+                  style={{ ...buttonStyle, marginTop: 22 }}
+                >
+                  <Save size={16} /> Save preferences
+                </button>
+
+                <p style={{ color: theme.secondary, fontSize: 12 }}>
+                  Currency, language, and date format are saved as preferences.
+                  Applying them across every page requires updating those pages
+                  to read these settings.
+                </p>
+              </Panel>
+            )}
+
+            {activeSection === "Notifications" && (
+              <Panel
+                title="Notification preferences"
+                subtitle="Choose which in-app alerts you want enabled."
+              >
+                {[
+                  {
+                    key: "budget",
+                    title: "Budget alerts",
+                    description:
+                      "Show alerts when spending approaches a budget limit.",
+                  },
+                  {
+                    key: "recurring",
+                    title: "Recurring payment reminders",
+                    description:
+                      "Enable the preference for upcoming payment reminders.",
+                  },
+                  {
+                    key: "goals",
+                    title: "Savings goal alerts",
+                    description: "Show alerts about savings goal progress.",
+                  },
+                  {
+                    key: "email",
+                    title: "Email notifications",
+                    description:
+                      "Preference only. Email delivery is not configured.",
+                  },
+                ].map((item, index, array) => (
+                  <div
+                    key={item.key}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 16,
+                      padding: "18px 0",
+                      borderBottom:
+                        index < array.length - 1
+                          ? `1px solid ${theme.border}`
+                          : "none",
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: 14 }}>{item.title}</strong>
+                      <p
+                        style={{
+                          margin: "5px 0 0",
+                          color: theme.secondary,
+                          fontSize: 12,
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {item.description}
+                      </p>
+                    </div>
+
+                    <input
+                      type="checkbox"
+                      checked={Boolean(notifs[item.key])}
+                      onChange={(e) =>
+                        updateNotificationPreference(item.key, e.target.checked)
+                      }
+                      aria-label={item.title}
+                      style={{
+                        width: 19,
+                        height: 19,
+                        accentColor: theme.primary,
+                        flexShrink: 0,
+                        cursor: "pointer",
+                      }}
+                    />
+                  </div>
+                ))}
+              </Panel>
+            )}
+
+            {activeSection === "Data" && (
+              <Panel
+                title="Data management"
+                subtitle="Download a backup or import transactions."
+              >
+                <div style={{ display: "grid", gap: 16 }}>
+                  <div>
+                    <strong>Export transactions as CSV</strong>
+                    <p style={{ color: theme.secondary, fontSize: 13 }}>
+                      Download your transaction list as a spreadsheet.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={exportCSV}
+                      style={buttonStyle}
+                    >
+                      <Download size={16} /> Export CSV
                     </button>
                   </div>
+
                   <div
                     style={{
                       borderTop: `1px solid ${theme.border}`,
-                      paddingTop: "16px",
+                      paddingTop: 16,
                     }}
                   >
-                    {showClearConfirm ? (
-                      <div
-                        style={{
-                          background: "#F43F5E15",
-                          border: "1px solid #F43F5E40",
-                          padding: "16px",
-                          borderRadius: "12px",
-                        }}
-                      >
-                        <p
-                          style={{
-                            margin: "0 0 12px 0",
-                            fontWeight: "600",
-                            color: "#F43F5E",
-                            fontFamily: "'Inter', sans-serif",
-                          }}
-                        >
-                          This will permanently delete all your transactions.
-                          Are you sure?
-                        </p>
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <button
-                            onClick={handleClearAll}
-                            className="hover-glow"
-                            style={{
-                              background: "#F43F5E",
-                              color: "white",
-                              border: "none",
-                              padding: "10px 20px",
-                              borderRadius: "10px",
-                              cursor: "pointer",
-                              fontWeight: "700",
-                              fontFamily: "'Inter', sans-serif",
-                            }}
-                          >
-                            Yes, Clear All
-                          </button>
-                          <button
-                            onClick={() => setShowClearConfirm(false)}
-                            className="hover-scale"
-                            style={{
-                              background: theme.border,
-                              color: theme.secondary,
-                              border: "none",
-                              padding: "10px 20px",
-                              borderRadius: "10px",
-                              cursor: "pointer",
-                              fontWeight: "700",
-                              fontFamily: "'Inter', sans-serif",
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setShowClearConfirm(true)}
-                        className="hover-glow"
-                        style={{
-                          background: "#F43F5E20",
-                          color: "#F43F5E",
-                          border: "1px solid #F43F5E40",
-                          padding: "10px 20px",
-                          borderRadius: "10px",
-                          cursor: "pointer",
-                          fontWeight: "700",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        <Trash2 size={15} /> Clear All Transactions
-                      </button>
-                    )}
+                    <strong>Export full backup as JSON</strong>
+                    <p style={{ color: theme.secondary, fontSize: 13 }}>
+                      Download transactions, budgets, goals, owed records,
+                      profile details, and preferences.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={exportJSON}
+                      style={buttonStyle}
+                    >
+                      <Download size={16} />{" "}
+                      {busy ? "Exporting..." : "Export JSON"}
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      borderTop: `1px solid ${theme.border}`,
+                      paddingTop: 16,
+                    }}
+                  >
+                    <strong>Import transactions from CSV</strong>
+                    <p style={{ color: theme.secondary, fontSize: 13 }}>
+                      Expected columns: Description, Category, Amount, Date.
+                      Imported rows are added to your account.
+                    </p>
+
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={handleImportCSV}
+                      style={{ display: "none" }}
+                    />
+
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => importInputRef.current?.click()}
+                      style={buttonStyle}
+                    >
+                      <Upload size={16} />{" "}
+                      {busy ? "Importing..." : "Import CSV"}
+                    </button>
                   </div>
                 </div>
-              </Section>
+              </Panel>
             )}
 
             {activeSection === "About" && (
-              <Section>
-                <SectionHeader title="About SplitMate" />
-                <div style={{ padding: "28px" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "16px",
-                      marginBottom: "28px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "64px",
-                        height: "64px",
-                        borderRadius: "16px",
-                        background: "linear-gradient(135deg, #3B82F6, #1E3A5F)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "white",
-                        fontWeight: "900",
-                        fontSize: "22px",
-                      }}
-                    >
-                      S
-                    </div>
-                    <div>
-                      <h2
-                        style={{
-                          margin: 0,
-                          fontWeight: "900",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        SplitMate
-                      </h2>
-                      <p
-                        style={{
-                          margin: "2px 0 0 0",
-                          color: theme.secondary,
-                          fontSize: "14px",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        AI-Powered Personal Finance Manager
-                      </p>
-                    </div>
-                  </div>
-                  {[
-                    { label: "Version", value: "1.0.0" },
-                    { label: "Built with", value: "React + Node.js (MERN)" },
-                    { label: "Developer", value: "Veda Shiva Prasad" },
-                    { label: "GitHub", value: "github.com/Veda-Shiva-Prasad" },
-                  ].map((item) => (
-                    <div
-                      key={item.label}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        padding: "14px 0",
-                        borderBottom: `1px solid ${theme.border}`,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          color: theme.secondary,
-                          fontWeight: "600",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        {item.label}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "700",
-                          fontFamily: "'Inter', sans-serif",
-                        }}
-                      >
-                        {item.value}
-                      </span>
-                    </div>
-                  ))}
-                  <div
-                    style={{ display: "flex", gap: "16px", marginTop: "24px" }}
-                  >
-                    <button
-                      className="hover-scale"
-                      style={{
-                        background: `${theme.primary}15`,
-                        color: theme.primary,
-                        border: "none",
-                        padding: "10px 20px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        fontWeight: "700",
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Privacy Policy
-                    </button>
-                    <button
-                      className="hover-scale"
-                      style={{
-                        background: `${theme.primary}15`,
-                        color: theme.primary,
-                        border: "none",
-                        padding: "10px 20px",
-                        borderRadius: "10px",
-                        cursor: "pointer",
-                        fontWeight: "700",
-                        fontFamily: "'Inter', sans-serif",
-                      }}
-                    >
-                      Terms of Use
-                    </button>
-                  </div>
+              <Panel
+                title="About SplitMate"
+                subtitle="Personal finance and expense management."
+              >
+                <h3 style={{ marginTop: 0 }}>SplitMate</h3>
+                <p style={{ color: theme.secondary, lineHeight: 1.8 }}>
+                  Track expenses, manage budgets, organize savings goals, and
+                  review your financial activity in one place.
+                </p>
+
+                <div
+                  style={{
+                    padding: 16,
+                    background: theme.bg,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: 12,
+                  }}
+                >
+                  <strong>Current capabilities</strong>
+                  <ul style={{ color: theme.secondary, lineHeight: 1.9 }}>
+                    <li>Expense and budget management</li>
+                    <li>Savings goals and activity history</li>
+                    <li>Light and dark themes</li>
+                    <li>CSV and JSON data exports</li>
+                    <li>In-app financial alerts based on available data</li>
+                  </ul>
                 </div>
-              </Section>
+              </Panel>
             )}
           </div>
         </div>
@@ -1361,5 +1127,19 @@ const Settings = ({ isDarkMode, setIsDarkMode }) => {
     </div>
   );
 };
+
+function downloadFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
 export default Settings;

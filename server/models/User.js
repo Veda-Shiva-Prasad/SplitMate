@@ -1,29 +1,36 @@
 const mongoose = require("mongoose");
 
-const UserSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: [true, "Please add a name"],
-  },
-  email: {
-    type: String,
-    required: [true, "Please add an email"],
-    unique: true,
-    match: [
-      /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
-      "Please add a valid email",
-    ],
-  },
-  password: {
-    type: String,
-    required: [true, "Please add a password"],
-    minlength: 5,
-    select: false, // This hides the password by default when we query users
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, "Please add a name"],
+      trim: true,
+      minlength: [2, "Name must contain at least 2 characters"],
+      maxlength: [80, "Name cannot exceed 80 characters"],
+    },
 
-module.exports = mongoose.model("User", UserSchema);
+    email: {
+      type: String,
+      required: [true, "Please add an email"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      maxlength: 254,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Please add a valid email"],
+    },
+
+    password: {
+      type: String,
+      required: [true, "Please add a password"],
+      minlength: [6, "Password must contain at least 6 characters"],
+      maxlength: [128, "Password cannot exceed 128 characters"],
+      select: false,
+    },
+  },
+  {
+    timestamps: true,
+  },
+);
+
+module.exports = mongoose.model("User", userSchema);

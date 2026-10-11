@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Sun, Moon, Bell, LogOut, ChevronDown } from "lucide-react";
+import { useData } from "../context/DataContext";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard" },
@@ -17,400 +18,353 @@ const navItems = [
 const Navbar = ({ isDarkMode, setIsDarkMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [showNotifs, setShowNotifs] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      text: "Netflix payment due in 2 days",
-      time: "1h ago",
-      read: false,
-    },
-    {
-      id: 2,
-      text: "You spent 40% more on Food this week",
-      time: "3h ago",
-      read: false,
-    },
-    {
-      id: 3,
-      text: "Goal: Emergency Fund reached 50%!",
-      time: "1d ago",
-      read: false,
-    },
-  ]);
+  const { transactions, budgets, goals } = useData();
 
-  const userName = localStorage.getItem("userName") || "User";
-  const userEmail = localStorage.getItem("userEmail") || "";
-  const userInitial = userName.charAt(0).toUpperCase();
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [userName, setUserName] = useState(
+    localStorage.getItem("userName") || "User",
+  );
+  const [userEmail, setUserEmail] = useState(
+    localStorage.getItem("userEmail") || "",
+  );
+  const [userPhoto, setUserPhoto] = useState(
+    localStorage.getItem("userPhoto") || "",
+  );
+
+  useEffect(() => {
+    const syncProfile = () => {
+      setUserName(localStorage.getItem("userName") || "User");
+      setUserEmail(localStorage.getItem("userEmail") || "");
+      setUserPhoto(localStorage.getItem("userPhoto") || "");
+    };
+
+    syncProfile();
+    window.addEventListener("storage", syncProfile);
+    window.addEventListener("splitmate-profile-updated", syncProfile);
+
+    return () => {
+      window.removeEventListener("storage", syncProfile);
+      window.removeEventListener("splitmate-profile-updated", syncProfile);
+    };
+  }, []);
 
   const theme = {
-    card: isDarkMode ? "#111827" : "#FFFFFF",
-    border: isDarkMode ? "#1E2D45" : "#E2E8F0",
-    text: isDarkMode ? "#F1F5F9" : "#1E293B",
-    secondary: isDarkMode ? "#94A3B8" : "#64748B",
-    bg: isDarkMode ? "#0A0F1E" : "#F1F5F9",
-    primary: "#3B82F6",
+    card: isDarkMode ? "#111827" : "#ffffff",
+    border: isDarkMode ? "#26334b" : "#e2e8f0",
+    text: isDarkMode ? "#f1f5f9" : "#1e293b",
+    secondary: isDarkMode ? "#94a3b8" : "#64748b",
+    primary: "#3b82f6",
+    hover: isDarkMode ? "#1e293b" : "#f1f5f9",
   };
 
   const handleLogout = () => {
-    localStorage.clear();
-    navigate("/login");
+    [
+      "token",
+      "user",
+      "userName",
+      "userEmail",
+      "userPhone",
+      "userPhoto",
+    ].forEach((key) => localStorage.removeItem(key));
+
+    navigate("/login", { replace: true });
   };
 
-  const markAllRead = () => {
-    setNotifications(notifications.map((n) => ({ ...n, read: true })));
-  };
+  const navButtonStyle = (active) => ({
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+    background: active ? `${theme.primary}20` : "transparent",
+    color: active ? theme.primary : theme.secondary,
+    border: "none",
+    padding: "9px 12px",
+    borderRadius: "9px",
+    cursor: "pointer",
+    fontSize: "13px",
+    fontWeight: active ? 700 : 600,
+    transition: "background 0.2s, color 0.2s",
+  });
 
   return (
     <nav
       style={{
-        height: "70px",
-        backgroundColor: theme.card,
+        minHeight: 70,
+        background: theme.card,
         borderBottom: `1px solid ${theme.border}`,
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 30px",
+        gap: 18,
+        padding: "10px 24px",
         position: "sticky",
         top: 0,
         zIndex: 100,
+        flexWrap: "wrap",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-        <h2
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 22,
+          flex: "1 1 650px",
+          minWidth: 0,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => {
+            navigate("/dashboard");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          title="Go to dashboard"
+          className="splitmate-logo"
           style={{
             color: theme.primary,
-            fontWeight: "900",
-            margin: 0,
-            fontSize: "22px",
+            fontWeight: 900,
+            fontSize: 23,
+            border: 0,
+            background: "transparent",
             cursor: "pointer",
-            fontFamily: "'Inter', sans-serif",
+            flexShrink: 0,
+            transition: "transform 0.2s ease",
           }}
-          onClick={() => navigate("/dashboard")}
         >
           SplitMate
-        </h2>
-        <div style={{ display: "flex", gap: "2px" }}>
-          {navItems.map((item) => (
-            <button
-              key={item.label}
-              onClick={() => navigate(item.path)}
-              style={{
-                background:
-                  location.pathname === item.path
-                    ? `${theme.primary}20`
-                    : "transparent",
-                color:
-                  location.pathname === item.path
-                    ? theme.primary
-                    : theme.secondary,
-                border: "none",
-                padding: "7px 11px",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                transition: "all 0.2s",
-                fontFamily: "'Inter', sans-serif",
-              }}
-              className="hover-scale"
-            >
-              {item.label}
-            </button>
-          ))}
+        </button>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 3,
+            overflowX: "auto",
+            flex: 1,
+            minWidth: 0,
+            scrollbarWidth: "thin",
+            paddingBottom: 2,
+          }}
+        >
+          {navItems.map((item) => {
+            const active = location.pathname === item.path;
+
+            return (
+              <button
+                type="button"
+                key={item.path}
+                onClick={() => navigate(item.path)}
+                style={navButtonStyle(active)}
+                onMouseEnter={(e) => {
+                  if (!active) e.currentTarget.style.background = theme.hover;
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 14,
+          flexShrink: 0,
+        }}
+      >
         <button
+          type="button"
           onClick={() => setIsDarkMode(!isDarkMode)}
-          className="hover-scale"
+          title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
+          aria-label="Toggle color theme"
           style={{
-            background: "none",
-            border: "none",
+            border: 0,
+            background: "transparent",
             color: theme.secondary,
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
+            display: "grid",
+            placeItems: "center",
+            padding: 7,
           }}
         >
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <div style={{ position: "relative" }}>
-          <button
-            onClick={() => {
-              setShowNotifs(!showNotifs);
-              setShowUserMenu(false);
-            }}
-            className="hover-scale"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              color: theme.secondary,
-              position: "relative",
-            }}
-          >
-            <Bell size={20} />
-            {unreadCount > 0 && (
-              <span
-                style={{
-                  position: "absolute",
-                  top: "-6px",
-                  right: "-6px",
-                  background: "#F43F5E",
-                  color: "white",
-                  borderRadius: "50%",
-                  width: "16px",
-                  height: "16px",
-                  fontSize: "10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: "bold",
-                }}
-              >
-                {unreadCount}
-              </span>
-            )}
-          </button>
-          {showNotifs && (
-            <div
-              className="animate-scaleIn"
+        <button
+          type="button"
+          onClick={() => navigate("/notifications")}
+          title="View notifications"
+          aria-label="Open notifications"
+          style={{
+            position: "relative",
+            display: "grid",
+            placeItems: "center",
+            border: 0,
+            background: "transparent",
+            color: theme.secondary,
+            cursor: "pointer",
+            padding: 7,
+          }}
+        >
+          <Bell size={20} />
+          {(transactions.length > 0 ||
+            budgets.length > 0 ||
+            goals.length > 0) && (
+            <span
               style={{
                 position: "absolute",
+                top: 0,
                 right: 0,
-                top: "40px",
-                width: "320px",
-                background: theme.card,
-                border: `1px solid ${theme.border}`,
-                borderRadius: "16px",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
-                zIndex: 200,
-                overflow: "hidden",
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                background: "#f59e0b",
               }}
-            >
-              <div
-                style={{
-                  padding: "16px 20px",
-                  borderBottom: `1px solid ${theme.border}`,
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span
-                  style={{
-                    fontWeight: "800",
-                    fontSize: "14px",
-                    color: theme.text,
-                  }}
-                >
-                  Notifications
-                </span>
-                <button
-                  onClick={markAllRead}
-                  className="hover-scale"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: theme.primary,
-                    cursor: "pointer",
-                    fontSize: "12px",
-                    fontWeight: "700",
-                  }}
-                >
-                  Mark all read
-                </button>
-              </div>
-              {notifications.map((n) => (
-                <div
-                  key={n.id}
-                  style={{
-                    padding: "14px 20px",
-                    borderBottom: `1px solid ${theme.border}`,
-                    background: n.read ? "transparent" : `${theme.primary}08`,
-                    display: "flex",
-                    gap: "12px",
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      background: n.read ? "transparent" : theme.primary,
-                      marginTop: "5px",
-                      flexShrink: 0,
-                    }}
-                  />
-                  <div>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: "13px",
-                        fontWeight: "600",
-                        color: theme.text,
-                      }}
-                    >
-                      {n.text}
-                    </p>
-                    <p
-                      style={{
-                        margin: "2px 0 0 0",
-                        fontSize: "11px",
-                        color: theme.secondary,
-                      }}
-                    >
-                      {n.time}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            />
           )}
-        </div>
+        </button>
 
         <div style={{ position: "relative" }}>
           <button
-            onClick={() => {
-              setShowUserMenu(!showUserMenu);
-              setShowNotifs(false);
-            }}
-            className="hover-scale"
+            type="button"
+            onClick={() => setShowUserMenu((current) => !current)}
+            aria-expanded={showUserMenu}
             style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              background: "none",
-              border: "none",
+              gap: 8,
+              border: 0,
+              background: "transparent",
               cursor: "pointer",
+              color: theme.text,
             }}
           >
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #3B82F6, #1E3A5F)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "white",
-                fontWeight: "bold",
-                fontSize: "14px",
-              }}
-            >
-              {userInitial}
-            </div>
-            <span
-              style={{ fontSize: "13px", fontWeight: "600", color: theme.text }}
-            >
+            {userPhoto ? (
+              <img
+                src={userPhoto}
+                alt="Profile"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  objectFit: "cover",
+                  border: `2px solid ${theme.primary}`,
+                }}
+              />
+            ) : (
+              <span
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "linear-gradient(135deg,#3b82f6,#6366f1)",
+                  color: "white",
+                  fontWeight: 800,
+                }}
+              >
+                {(userName.charAt(0) || "U").toUpperCase()}
+              </span>
+            )}
+
+            <span style={{ fontSize: 13, fontWeight: 700 }}>
               {userName.split(" ")[0]}
             </span>
-            <ChevronDown size={14} color={theme.secondary} />
+            <ChevronDown size={14} />
           </button>
+
           {showUserMenu && (
             <div
-              className="animate-scaleIn"
               style={{
                 position: "absolute",
                 right: 0,
-                top: "48px",
-                width: "200px",
+                top: 48,
+                width: 235,
                 background: theme.card,
+                color: theme.text,
                 border: `1px solid ${theme.border}`,
-                borderRadius: "14px",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.3)",
-                zIndex: 200,
+                borderRadius: 14,
+                boxShadow: "0 16px 40px rgba(0,0,0,0.2)",
                 overflow: "hidden",
+                zIndex: 300,
               }}
             >
               <div
                 style={{
-                  padding: "14px 16px",
+                  padding: 16,
                   borderBottom: `1px solid ${theme.border}`,
                 }}
               >
+                <strong>{userName}</strong>
                 <p
                   style={{
-                    margin: 0,
-                    fontWeight: "800",
-                    fontSize: "14px",
-                    color: theme.text,
-                  }}
-                >
-                  {userName}
-                </p>
-                <p
-                  style={{
-                    margin: "2px 0 0 0",
-                    fontSize: "12px",
+                    margin: "4px 0 0",
                     color: theme.secondary,
+                    fontSize: 12,
+                    overflowWrap: "anywhere",
                   }}
                 >
                   {userEmail}
                 </p>
               </div>
+
               <button
+                type="button"
                 onClick={() => {
-                  navigate("/settings");
                   setShowUserMenu(false);
+                  navigate("/settings");
                 }}
-                className="hover-lift"
                 style={{
                   width: "100%",
-                  padding: "12px 16px",
-                  background: "none",
-                  border: "none",
+                  padding: 13,
+                  border: 0,
+                  background: "transparent",
                   color: theme.text,
-                  cursor: "pointer",
                   textAlign: "left",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  fontFamily: "'Inter', sans-serif",
+                  cursor: "pointer",
                 }}
               >
                 ⚙️ Settings
               </button>
+
               <button
+                type="button"
                 onClick={handleLogout}
-                className="hover-lift"
                 style={{
                   width: "100%",
-                  padding: "12px 16px",
-                  background: "none",
-                  border: "none",
-                  color: "#F43F5E",
-                  cursor: "pointer",
+                  padding: 13,
+                  border: 0,
+                  background: "transparent",
+                  color: "#ef4444",
                   textAlign: "left",
-                  fontSize: "13px",
-                  fontWeight: "700",
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  gap: "8px",
-                  fontFamily: "'Inter', sans-serif",
+                  gap: 9,
                 }}
               >
-                <LogOut size={14} /> Logout
+                <LogOut size={15} /> Log out
               </button>
             </div>
           )}
         </div>
       </div>
 
-      {(showNotifs || showUserMenu) && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 150 }}
-          onClick={() => {
-            setShowNotifs(false);
-            setShowUserMenu(false);
+      {showUserMenu && (
+        <button
+          type="button"
+          aria-label="Close account menu"
+          onClick={() => setShowUserMenu(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 90,
+            background: "transparent",
+            border: 0,
+            cursor: "default",
           }}
         />
       )}

@@ -1,144 +1,237 @@
+const mongoose = require("mongoose");
 const Budget = require("../models/Budget");
+const Expense = require("../models/Expense");
 
-// @desc    Get all budgets for user (excluding the Monthly meta budget)
-// @route   GET /api/budgets
+const getMonthRange = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(
+    2,
+    "0",
+  )}`;
+
+  return { start, end, month };
+};
+
+const isValidAmount = (value, allowZero = false) =>
+  typeof value === "number" &&
+  Number.isFinite(value) &&
+  (allowZero ? value >= 0 : value > 0);
+
+const handleError = (res, error, operation) => {
+  console.error(`${operation} error:`, error);
+
+  if (error.name === "ValidationError") {
+    return res.status(400).json({ message: "Invalid budget data." });
+  }
+
+  return res.status(500).json({
+    message: "An unexpected server error occurred.",
+  });
+};
+
+// GET /api/budgets
 exports.getBudgets = async (req, res) => {
   try {
-    const currentMonth = new Date();
-    const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+    const { start, end, month } = getMonthRange();
 
-    const budgets = await Budget.find({
-      userId: req.user.id,
-      month: monthKey,
-      category: { $ne: "Monthly" }, // Exclude the Monthly meta budget
-    });
+    const [budgets, spending] = await Promise.all([
+      Budget.find({
+        userId: req.user._id,
+        month,
+        category: { $ne: "Monthly" },
+      }).lean(),
 
-    res.status(200).json(budgets);
+      Expense.aggregate([
+        {
+          $match: {
+            paidBy: new mongoose.Types.ObjectId(req.user._id.toString()),
+            type: "expense",
+            date: { $gte: start, $lt: end },
+          },
+        },
+        {
+          $group: {
+            _id: "$category",
+            spent: { $sum: "$amount" },
+          },
+        },
+      ]),
+    ]);
+
+    const spentByCategory = new Map(
+      spending.map((item) => [item._id || "Other", item.spent]),
+    );
+
+    const result = budgets.map((budget) => ({
+      ...budget,
+      spent: spentByCategory.get(budget.category) || 0,
+    }));
+
+    return res.status(200).json(result);
   } catch (error) {
-    console.error("Error in getBudgets:", error);
-    res.status(500).json({ message: error.message });
+    return handleError(res, error, "Get budgets");
   }
 };
 
-// @desc    Create or update budget
-// @route   POST /api/budgets
+// POST /api/budgets
 exports.createOrUpdateBudget = async (req, res) => {
   try {
-    const { category, limit, spent } = req.body;
-    const currentMonth = new Date();
-    const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+    const { category, limit } = req.body || {};
 
-    let budget = await Budget.findOne({
-      userId: req.user.id,
-      category,
-      month: monthKey,
-    });
+    const allowedCategories = [
+      "Food",
+      "Transport",
+      "Bills",
+      "Entertainment",
+      "Health",
+      "Shopping",
+      "Other",
+    ];
 
-    if (budget) {
-      budget.limit = limit || budget.limit;
-      budget.spent = spent || budget.spent;
-      await budget.save();
-    } else {
-      budget = await Budget.create({
-        userId: req.user.id,
-        category,
-        limit,
-        spent: spent || 0,
-        month: monthKey,
+    if (
+      typeof category !== "string" ||
+      !allowedCategories.includes(category.trim())
+    ) {
+      return res.status(400).json({
+        message: "Please select a valid budget category.",
       });
     }
 
-    res.status(200).json(budget);
+    if (!isValidAmount(limit)) {
+      return res.status(400).json({
+        message: "Budget limit must be a positive number.",
+      });
+    }
+
+    const { month } = getMonthRange();
+
+    const budget = await Budget.findOneAndUpdate(
+      {
+        userId: req.user._id,
+        category: category.trim(),
+        month,
+      },
+      {
+        $set: { limit },
+        $setOnInsert: {
+          userId: req.user._id,
+          category: category.trim(),
+          month,
+          spent: 0,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
+    return res.status(200).json(budget);
   } catch (error) {
-    console.error("Error in createOrUpdateBudget:", error);
-    res.status(500).json({ message: error.message });
+    return handleError(res, error, "Create or update budget");
   }
 };
 
-// @desc    Delete budget
-// @route   DELETE /api/budgets/:id
+// DELETE /api/budgets/:id
 exports.deleteBudget = async (req, res) => {
   try {
-    await Budget.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: "Budget deleted" });
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid budget ID." });
+    }
+
+    const budget = await Budget.findOneAndDelete({
+      _id: id,
+      userId: req.user._id,
+      category: { $ne: "Monthly" },
+    });
+
+    if (!budget) {
+      return res.status(404).json({ message: "Budget not found." });
+    }
+
+    return res.status(200).json({
+      message: "Budget deleted successfully.",
+    });
   } catch (error) {
-    console.error("Error in deleteBudget:", error);
-    res.status(500).json({ message: error.message });
+    return handleError(res, error, "Delete budget");
   }
 };
 
-// @desc    Get monthly limit (from Monthly category budget)
-// @route   GET /api/budgets/limit
+// GET /api/budgets/limit
 exports.getMonthlyLimit = async (req, res) => {
   try {
-    const currentMonth = new Date();
-    const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
+    const { month } = getMonthRange();
 
-    // Look for the Monthly category budget
-    let monthlyBudget = await Budget.findOne({
-      userId: req.user.id,
+    let budget = await Budget.findOne({
+      userId: req.user._id,
       category: "Monthly",
-      month: monthKey,
+      month,
     });
 
-    // If no Monthly budget exists, create one with default 20000
-    if (!monthlyBudget) {
-      monthlyBudget = await Budget.create({
-        userId: req.user.id,
+    if (!budget) {
+      budget = await Budget.create({
+        userId: req.user._id,
         category: "Monthly",
         limit: 20000,
         spent: 0,
-        month: monthKey,
+        month,
       });
     }
 
-    res.status(200).json({ limit: monthlyBudget.limit });
+    return res.status(200).json({ limit: budget.limit });
   } catch (error) {
-    console.error("Error in getMonthlyLimit:", error);
-    res.status(500).json({ message: error.message });
+    return handleError(res, error, "Get monthly limit");
   }
 };
 
-// @desc    Update monthly limit (update Monthly category budget)
-// @route   PUT /api/budgets/limit
+// PUT /api/budgets/limit
 exports.updateMonthlyLimit = async (req, res) => {
   try {
-    const { limit } = req.body;
+    const { limit } = req.body || {};
 
-    if (!limit || limit <= 0) {
-      return res
-        .status(400)
-        .json({ message: "Please provide a valid limit amount" });
-    }
-
-    const currentMonth = new Date();
-    const monthKey = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, "0")}`;
-
-    let monthlyBudget = await Budget.findOne({
-      userId: req.user.id,
-      category: "Monthly",
-      month: monthKey,
-    });
-
-    if (monthlyBudget) {
-      monthlyBudget.limit = limit;
-      await monthlyBudget.save();
-    } else {
-      monthlyBudget = await Budget.create({
-        userId: req.user.id,
-        category: "Monthly",
-        limit,
-        spent: 0,
-        month: monthKey,
+    if (!isValidAmount(limit)) {
+      return res.status(400).json({
+        message: "Monthly budget limit must be a positive number.",
       });
     }
 
-    res.status(200).json({
-      limit: monthlyBudget.limit,
-      message: "Budget limit updated successfully",
+    const { month } = getMonthRange();
+
+    const budget = await Budget.findOneAndUpdate(
+      {
+        userId: req.user._id,
+        category: "Monthly",
+        month,
+      },
+      {
+        $set: { limit },
+        $setOnInsert: {
+          userId: req.user._id,
+          category: "Monthly",
+          month,
+          spent: 0,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+      },
+    );
+
+    return res.status(200).json({
+      limit: budget.limit,
+      message: "Monthly budget updated successfully.",
     });
   } catch (error) {
-    console.error("Error in updateMonthlyLimit:", error);
-    res.status(500).json({ message: error.message });
+    return handleError(res, error, "Update monthly limit");
   }
 };
