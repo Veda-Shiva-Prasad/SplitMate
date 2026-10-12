@@ -1,0 +1,72 @@
+/* App-wide layout safeguards */
+.app-container,
+.page-container,
+.dashboard-container {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+main > * {
+  min-width: 0;
+}
+
+main h1,
+main h2,
+main h3,
+main p {
+  overflow-wrap: anywhere;
+}
+
+main input,
+main select,
+main textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+/* Dashboard summary cards */
+@media (max-width: 760px) {
+  main > section {
+    min-width: 0;
+  }
+
+  main > section > * {
+    min-width: 0;
+  }
+
+  main > section > div {
+    overflow-wrap: anywhere;
+  }
+
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .settings-fields {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .modal-content {
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  main h1 {
+    font-size: clamp(20px, 5vw, 25px);
+  }
+
+  main h2 {
+    font-size: clamp(18px, 4.5vw, 22px);
+  }
+
+  main > header {
+    align-items: stretch;
+  }
+
+  main > header > button {
+    align-self: flex-start;
+  }
+}

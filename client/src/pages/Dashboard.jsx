@@ -693,7 +693,16 @@ const Dashboard = ({ isDarkMode, setIsDarkMode }) => {
           </div>
         </section>
 
+        {/* <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 2fr) minmax(260px, 1fr)",
+            gap: 16,
+            marginBottom: 22,
+          }}
+        > */}
         <section
+          className="dashboard-chart-layout"
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(0, 2fr) minmax(260px, 1fr)",

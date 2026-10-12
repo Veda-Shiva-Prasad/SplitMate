@@ -1,24 +1,63 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Bell, Wallet, Target, CalendarClock, CheckCheck } from "lucide-react";
-import Navbar from "../components/Navbar.jsx";
+import { Bell, CheckCheck, CalendarClock, Target, Wallet } from "lucide-react";
 import { useData } from "../context/DataContext";
+import { buildNotifications } from "../utils/notifications";
+import Navbar from "../components/Navbar.jsx";
 
-export default function Notifications({ isDarkMode, setIsDarkMode }) {
-  const navigate = useNavigate();
-  const { transactions, budgets, goals, loading } = useData();
-  const [readIds, setReadIds] = useState(() => {
+const readNotifications = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+};
+
+const Notifications = ({ isDarkMode = false, setIsDarkMode }) => {
+  const { transactions, budgets, goals, recurring, loading } = useData();
+
+  const user = (() => {
     try {
-      return JSON.parse(
-        localStorage.getItem("splitmate-read-notifications") || "[]",
-      );
+      return JSON.parse(localStorage.getItem("user") || "{}");
     } catch {
-      return [];
+      return {};
     }
-  });
+  })();
+
+  const userKey =
+    user._id || user.id || localStorage.getItem("userEmail") || "guest";
+  const storageKey = `splitmate-read-notifications-${userKey}`;
+
+  const [readIds, setReadIds] = useState(() => readNotifications(storageKey));
+
+  const notifications = useMemo(
+    () =>
+      buildNotifications({
+        transactions,
+        budgets,
+        goals,
+        recurring,
+      }),
+    [transactions, budgets, goals, recurring],
+  );
+
+  const unreadCount = notifications.filter(
+    (notification) => !readIds.includes(notification.id),
+  ).length;
+
+  const markAllRead = () => {
+    const next = notifications.map((notification) => notification.id);
+    setReadIds(next);
+
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch (error) {
+      console.error("Unable to save notification read status:", error);
+    }
+  };
 
   const theme = {
-    bg: isDarkMode ? "#0a0f1e" : "#f1f5f9",
+    background: isDarkMode ? "#0a0f1e" : "#f1f5f9",
     card: isDarkMode ? "#111827" : "#ffffff",
     text: isDarkMode ? "#f1f5f9" : "#1e293b",
     secondary: isDarkMode ? "#94a3b8" : "#64748b",
@@ -26,279 +65,218 @@ export default function Notifications({ isDarkMode, setIsDarkMode }) {
     primary: "#3b82f6",
   };
 
-  const alerts = useMemo(() => {
-    const result = [];
-    const now = new Date();
-    const month = now.getMonth();
-    const year = now.getFullYear();
-
-    const monthExpenses = transactions.filter((tx) => {
-      const date = new Date(tx.rawDate || tx.date);
-      return (
-        !Number.isNaN(date.getTime()) &&
-        date.getMonth() === month &&
-        date.getFullYear() === year &&
-        Number(tx.amount) < 0
-      );
-    });
-
-    const spendingByCategory = {};
-    monthExpenses.forEach((tx) => {
-      const category = tx.category || "Other";
-      spendingByCategory[category] =
-        (spendingByCategory[category] || 0) + Math.abs(Number(tx.amount));
-    });
-
-    budgets.forEach((budget, index) => {
-      const category =
-        budget.categoryName ||
-        budget.category?.name ||
-        budget.category ||
-        "Budget";
-      const limit = Number(
-        budget.limit ?? budget.amount ?? budget.budgetAmount ?? 0,
-      );
-
-      if (!limit || !Number.isFinite(limit)) return;
-
-      const spent = spendingByCategory[category] || 0;
-      const percent = (spent / limit) * 100;
-
-      if (percent >= 80) {
-        result.push({
-          id: `budget-${budget._id || budget.id || index}`,
-          type: "budget",
-          icon: Wallet,
-          title: percent >= 100 ? "Budget exceeded" : "Budget almost reached",
-          message: `${category}: ${Math.round(percent)}% of the ₹${limit.toLocaleString("en-IN")} limit used.`,
-          time: "Based on current-month expenses",
-          priority: percent >= 100 ? "high" : "normal",
-          path: "/budget",
-        });
-      }
-    });
-
-    goals.forEach((goal, index) => {
-      const target = Number(goal.targetAmount ?? goal.target ?? 0);
-      const saved = Number(
-        goal.savedAmount ?? goal.currentAmount ?? goal.saved ?? 0,
-      );
-
-      if (!target || !Number.isFinite(target)) return;
-
-      const percent = Math.min(100, (saved / target) * 100);
-
-      if (percent >= 25) {
-        result.push({
-          id: `goal-${goal._id || goal.id || index}`,
-          type: "goal",
-          icon: Target,
-          title:
-            percent >= 100 ? "Savings goal reached" : "Savings goal progress",
-          message: `${goal.name || goal.title || "Your goal"} is ${Math.round(percent)}% complete.`,
-          time: "Based on current goal progress",
-          priority: "normal",
-          path: "/goals",
-        });
-      }
-    });
-
-    // Recurring-payment reminders are not generated here because the
-    // exact recurring record schema and due-date fields must be confirmed.
-    return result.sort((a, b) =>
-      a.priority === "high" && b.priority !== "high" ? -1 : 1,
-    );
-  }, [transactions, budgets, goals]);
-
-  const markAllRead = () => {
-    const ids = alerts.map((alert) => alert.id);
-    const next = [...new Set([...readIds, ...ids])];
-
-    setReadIds(next);
-    localStorage.setItem("splitmate-read-notifications", JSON.stringify(next));
+  const iconFor = (type) => {
+    if (type === "budget") return <Wallet size={19} />;
+    if (type === "goal") return <Target size={19} />;
+    return <CalendarClock size={19} />;
   };
-
-  const markRead = (id) => {
-    const next = [...new Set([...readIds, id])];
-    setReadIds(next);
-    localStorage.setItem("splitmate-read-notifications", JSON.stringify(next));
-  };
-
-  const unreadCount = alerts.filter(
-    (alert) => !readIds.includes(alert.id),
-  ).length;
 
   return (
-    <div
-      style={{ minHeight: "100vh", background: theme.bg, color: theme.text }}
-    >
-      <Navbar isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
+    <>
+      <Navbar
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode || (() => {})}
+      />
 
       <main
         style={{
-          maxWidth: 1000,
-          margin: "0 auto",
-          padding: "32px 20px",
+          minHeight: "calc(100vh - 70px)",
+          padding: "28px 20px",
+          background: theme.background,
+          color: theme.text,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 24,
-          }}
-        >
-          <div>
-            <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>
-              Notifications
-            </h1>
-            <p style={{ color: theme.secondary, marginTop: 8 }}>
-              {unreadCount} unread · Budget alerts and savings progress
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={markAllRead}
-            disabled={unreadCount === 0}
+        <section style={{ maxWidth: 900, margin: "0 auto" }}>
+          <header
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 8,
-              padding: "10px 14px",
-              border: `1px solid ${theme.border}`,
-              borderRadius: 10,
-              background: theme.card,
-              color: theme.text,
-              cursor: unreadCount ? "pointer" : "default",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 16,
+              marginBottom: 24,
             }}
           >
-            <CheckCheck size={17} /> Mark all read
-          </button>
-        </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 28 }}>Notifications</h1>
+              <p style={{ color: theme.secondary, marginBottom: 0 }}>
+                Budget updates, savings progress, and upcoming payments.
+              </p>
+            </div>
 
-        <section
-          style={{
-            background: theme.card,
-            border: `1px solid ${theme.border}`,
-            borderRadius: 18,
-            overflow: "hidden",
-          }}
-        >
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 14px",
+                border: `1px solid ${theme.border}`,
+                borderRadius: 10,
+                background: theme.card,
+                color: theme.primary,
+                cursor: unreadCount ? "pointer" : "not-allowed",
+                opacity: unreadCount ? 1 : 0.6,
+              }}
+            >
+              <CheckCheck size={17} />
+              Mark all read
+            </button>
+          </header>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 12,
+              marginBottom: 20,
+              flexWrap: "wrap",
+            }}
+          >
+            <div
+              style={{
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 12,
+                padding: "14px 18px",
+                flex: "1 1 180px",
+              }}
+            >
+              <div style={{ color: theme.secondary, fontSize: 13 }}>
+                Total notifications
+              </div>
+              <strong style={{ fontSize: 24 }}>{notifications.length}</strong>
+            </div>
+
+            <div
+              style={{
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 12,
+                padding: "14px 18px",
+                flex: "1 1 180px",
+              }}
+            >
+              <div style={{ color: theme.secondary, fontSize: 13 }}>Unread</div>
+              <strong style={{ fontSize: 24 }}>{unreadCount}</strong>
+            </div>
+          </div>
+
           {loading ? (
-            <p style={{ padding: 24, color: theme.secondary }}>
-              Loading your financial data...
-            </p>
-          ) : alerts.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "55px 20px" }}>
-              <Bell size={35} color={theme.secondary} />
-              <h3>No alerts right now</h3>
-              <p style={{ color: theme.secondary }}>
-                Budget alerts will appear when a category reaches 80% of its
-                limit. Savings progress alerts appear when a goal reaches 25%.
+            <div
+              style={{
+                padding: 30,
+                textAlign: "center",
+                color: theme.secondary,
+              }}
+            >
+              Loading your notifications…
+            </div>
+          ) : notifications.length === 0 ? (
+            <div
+              style={{
+                padding: 36,
+                textAlign: "center",
+                background: theme.card,
+                border: `1px solid ${theme.border}`,
+                borderRadius: 16,
+              }}
+            >
+              <Bell
+                size={34}
+                color={theme.secondary}
+                style={{ marginBottom: 12 }}
+              />
+              <h3 style={{ margin: "0 0 8px" }}>You're all caught up</h3>
+              <p style={{ color: theme.secondary, margin: 0 }}>
+                Notifications will appear here when a budget is nearing its
+                limit, a goal makes progress, or a recurring payment is due
+                within seven days.
               </p>
             </div>
           ) : (
-            alerts.map((alert) => {
-              const Icon = alert.icon;
-              const isRead = readIds.includes(alert.id);
+            <div style={{ display: "grid", gap: 12 }}>
+              {notifications.map((notification) => {
+                const isRead = readIds.includes(notification.id);
 
-              return (
-                <article
-                  key={alert.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    gap: 14,
-                    padding: 20,
-                    borderBottom: `1px solid ${theme.border}`,
-                    background: isRead ? "transparent" : `${theme.primary}0b`,
-                  }}
-                >
-                  <div
+                return (
+                  <article
+                    key={notification.id}
                     style={{
-                      width: 42,
-                      height: 42,
-                      flexShrink: 0,
-                      display: "grid",
-                      placeItems: "center",
-                      borderRadius: 13,
-                      color:
-                        alert.priority === "high" ? "#ef4444" : theme.primary,
-                      background:
-                        alert.priority === "high"
-                          ? "#ef444415"
-                          : `${theme.primary}15`,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 14,
+                      padding: 18,
+                      borderRadius: 14,
+                      border: `1px solid ${theme.border}`,
+                      background: theme.card,
+                      opacity: isRead ? 0.75 : 1,
                     }}
                   >
-                    <Icon size={20} />
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <strong>{alert.title}</strong>
-                    <p
+                    <div
                       style={{
-                        margin: "6px 0",
-                        color: theme.secondary,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {alert.message}
-                    </p>
-                    <small style={{ color: theme.secondary }}>
-                      {alert.time}
-                    </small>
-                    <div style={{ marginTop: 10 }}>
-                      <button
-                        type="button"
-                        onClick={() => navigate(alert.path)}
-                        style={{
-                          border: 0,
-                          background: "transparent",
-                          padding: 0,
-                          color: theme.primary,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                        }}
-                      >
-                        View details →
-                      </button>
-                    </div>
-                  </div>
-
-                  {!isRead && (
-                    <button
-                      type="button"
-                      onClick={() => markRead(alert.id)}
-                      style={{
-                        border: `1px solid ${theme.border}`,
-                        background: theme.card,
-                        color: theme.secondary,
-                        borderRadius: 8,
-                        padding: "6px 9px",
-                        cursor: "pointer",
-                        fontSize: 12,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 42,
+                        height: 42,
+                        borderRadius: 12,
+                        background: `${theme.primary}18`,
+                        color: theme.primary,
                         flexShrink: 0,
                       }}
                     >
-                      Mark read
-                    </button>
-                  )}
-                </article>
-              );
-            })
+                      {iconFor(notification.type)}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          justifyContent: "space-between",
+                          alignItems: "flex-start",
+                        }}
+                      >
+                        <h3 style={{ margin: "0 0 6px", fontSize: 15 }}>
+                          {notification.title}
+                        </h3>
+                        {!isRead && (
+                          <span
+                            aria-label="Unread"
+                            style={{
+                              width: 8,
+                              height: 8,
+                              marginTop: 5,
+                              borderRadius: "50%",
+                              background: theme.primary,
+                              flexShrink: 0,
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <p
+                        style={{
+                          color: theme.secondary,
+                          margin: 0,
+                          lineHeight: 1.5,
+                          fontSize: 14,
+                        }}
+                      >
+                        {notification.message}
+                      </p>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           )}
         </section>
-
-        <p style={{ color: theme.secondary, fontSize: 12, marginTop: 14 }}>
-          Alerts are generated from your current app data. Browser
-          notifications, email delivery, and scheduled recurring-payment
-          reminders are not enabled.
-        </p>
       </main>
-    </div>
+    </>
   );
-}
+};
+
+export default Notifications;

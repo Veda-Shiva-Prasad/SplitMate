@@ -22,6 +22,7 @@ export const DataProvider = ({ children }) => {
   const [budgets, setBudgets] = useState([]);
   const [goals, setGoals] = useState([]);
   const [owedList, setOwedList] = useState([]);
+  const [recurring, setRecurring] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [monthlyBudget, setMonthlyBudget] = useState(20000);
   const [loading, setLoading] = useState(true);
@@ -35,6 +36,7 @@ export const DataProvider = ({ children }) => {
     setBudgets([]);
     setGoals([]);
     setOwedList([]);
+    setRecurring([]);
     setSummary(EMPTY_SUMMARY);
     setMonthlyBudget(20000);
   }, []);
@@ -43,7 +45,6 @@ export const DataProvider = ({ children }) => {
     const token = localStorage.getItem("token");
     const requestId = ++requestIdRef.current;
 
-    // Immediately clear data when the authenticated session changes.
     if (activeTokenRef.current !== token) {
       activeTokenRef.current = token;
       clearUserData();
@@ -66,12 +67,12 @@ export const DataProvider = ({ children }) => {
       API.get("/budgets/limit"),
       API.get("/budgets"),
       API.get("/goals"),
+      API.get("/recurring"),
     ];
 
     try {
       const results = await Promise.allSettled(requests);
 
-      // Ignore responses from an older request or session.
       if (
         requestId !== requestIdRef.current ||
         localStorage.getItem("token") !== token
@@ -86,6 +87,7 @@ export const DataProvider = ({ children }) => {
         budgetRes,
         budgetsRes,
         goalsRes,
+        recurringRes,
       ] = results;
 
       if (expensesRes.status === "fulfilled") {
@@ -141,6 +143,18 @@ export const DataProvider = ({ children }) => {
         setGoals([]);
       }
 
+      if (recurringRes.status === "fulfilled") {
+        setRecurring(
+          Array.isArray(recurringRes.value.data) ? recurringRes.value.data : [],
+        );
+      } else {
+        console.error(
+          "Failed to load recurring payments:",
+          recurringRes.reason,
+        );
+        setRecurring([]);
+      }
+
       setDataLoaded(true);
     } catch (error) {
       if (requestId === requestIdRef.current) {
@@ -157,7 +171,6 @@ export const DataProvider = ({ children }) => {
     fetchAllData();
 
     return () => {
-      // Invalidate requests when the provider unmounts.
       requestIdRef.current += 1;
     };
   }, [fetchAllData]);
@@ -172,6 +185,7 @@ export const DataProvider = ({ children }) => {
     budgets,
     goals,
     owedList,
+    recurring,
     summary,
     monthlyBudget,
     loading,
@@ -182,6 +196,7 @@ export const DataProvider = ({ children }) => {
     setBudgets,
     setGoals,
     setOwedList,
+    setRecurring,
     setMonthlyBudget,
     setSummary,
   };

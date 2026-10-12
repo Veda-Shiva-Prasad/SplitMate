@@ -1,7 +1,20 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Sun, Moon, Bell, LogOut, ChevronDown } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Sun,
+  Moon,
+  Bell,
+  LogOut,
+  ChevronDown,
+  Wallet,
+  Target,
+  CalendarClock,
+  Menu,
+  X,
+} from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useData } from "../context/DataContext";
+import { buildNotifications } from "../utils/notifications";
+import "./Navbar.css";
 
 const navItems = [
   { label: "Dashboard", path: "/dashboard" },
@@ -15,38 +28,99 @@ const navItems = [
   { label: "Settings", path: "/settings" },
 ];
 
-const Navbar = ({ isDarkMode, setIsDarkMode }) => {
+const readIds = (key) => {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+};
+
+const getStoredUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem("user") || "{}");
+  } catch {
+    return {};
+  }
+};
+
+const Navbar = ({ isDarkMode = false, setIsDarkMode = () => {} }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { transactions, budgets, goals } = useData();
 
+  const {
+    transactions = [],
+    budgets = [],
+    goals = [],
+    recurring = [],
+  } = useData();
+
+  const [showNotifs, setShowNotifs] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [userName, setUserName] = useState(
-    localStorage.getItem("userName") || "User",
-  );
-  const [userEmail, setUserEmail] = useState(
-    localStorage.getItem("userEmail") || "",
-  );
-  const [userPhoto, setUserPhoto] = useState(
-    localStorage.getItem("userPhoto") || "",
-  );
+  const [showMobileNav, setShowMobileNav] = useState(false);
+  const [profileVersion, setProfileVersion] = useState(0);
+  const [readVersion, setReadVersion] = useState(0);
 
   useEffect(() => {
-    const syncProfile = () => {
-      setUserName(localStorage.getItem("userName") || "User");
-      setUserEmail(localStorage.getItem("userEmail") || "");
-      setUserPhoto(localStorage.getItem("userPhoto") || "");
-    };
+    const updateProfile = () => setProfileVersion((version) => version + 1);
 
-    syncProfile();
-    window.addEventListener("storage", syncProfile);
-    window.addEventListener("splitmate-profile-updated", syncProfile);
+    const updateReadStatus = () => setReadVersion((version) => version + 1);
+
+    window.addEventListener("storage", updateProfile);
+    window.addEventListener("splitmate-profile-updated", updateProfile);
+    window.addEventListener("splitmate-notifications-read", updateReadStatus);
 
     return () => {
-      window.removeEventListener("storage", syncProfile);
-      window.removeEventListener("splitmate-profile-updated", syncProfile);
+      window.removeEventListener("storage", updateProfile);
+      window.removeEventListener("splitmate-profile-updated", updateProfile);
+      window.removeEventListener(
+        "splitmate-notifications-read",
+        updateReadStatus,
+      );
     };
   }, []);
+
+  const currentUser = useMemo(() => getStoredUser(), [profileVersion]);
+
+  const userName =
+    localStorage.getItem("userName") || currentUser.name || "User";
+
+  const userEmail =
+    localStorage.getItem("userEmail") || currentUser.email || "";
+
+  const userPhoto =
+    localStorage.getItem("userPhoto") || currentUser.profilePhoto || "";
+
+  const userInitial = userName.trim().charAt(0).toUpperCase() || "U";
+
+  const notifications = useMemo(
+    () =>
+      buildNotifications({
+        transactions,
+        budgets,
+        goals,
+        recurring,
+      }),
+    [transactions, budgets, goals, recurring],
+  );
+
+  const userKey =
+    currentUser._id ||
+    currentUser.id ||
+    localStorage.getItem("userEmail") ||
+    "guest";
+
+  const readStorageKey = `splitmate-read-notifications-${userKey}`;
+
+  const readNotificationIds = useMemo(
+    () => readIds(readStorageKey),
+    [readStorageKey, readVersion],
+  );
+
+  const unreadCount = notifications.filter(
+    (notification) => !readNotificationIds.includes(notification.id),
+  ).length;
 
   const theme = {
     card: isDarkMode ? "#111827" : "#ffffff",
@@ -54,7 +128,31 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
     text: isDarkMode ? "#f1f5f9" : "#1e293b",
     secondary: isDarkMode ? "#94a3b8" : "#64748b",
     primary: "#3b82f6",
-    hover: isDarkMode ? "#1e293b" : "#f1f5f9",
+  };
+
+  const closeMenus = () => {
+    setShowNotifs(false);
+    setShowUserMenu(false);
+    setShowMobileNav(false);
+  };
+
+  const goTo = (path) => {
+    closeMenus();
+    navigate(path);
+  };
+
+  const markAllRead = () => {
+    try {
+      localStorage.setItem(
+        readStorageKey,
+        JSON.stringify(notifications.map((notification) => notification.id)),
+      );
+
+      setReadVersion((version) => version + 1);
+      window.dispatchEvent(new Event("splitmate-notifications-read"));
+    } catch (error) {
+      console.error("Unable to save notification status:", error);
+    }
   };
 
   const handleLogout = () => {
@@ -67,307 +165,213 @@ const Navbar = ({ isDarkMode, setIsDarkMode }) => {
       "userPhoto",
     ].forEach((key) => localStorage.removeItem(key));
 
+    closeMenus();
     navigate("/login", { replace: true });
   };
 
-  const navButtonStyle = (active) => ({
-    flexShrink: 0,
-    whiteSpace: "nowrap",
-    background: active ? `${theme.primary}20` : "transparent",
-    color: active ? theme.primary : theme.secondary,
-    border: "none",
-    padding: "9px 12px",
-    borderRadius: "9px",
-    cursor: "pointer",
-    fontSize: "13px",
-    fontWeight: active ? 700 : 600,
-    transition: "background 0.2s, color 0.2s",
-  });
+  const notificationIcon = (type) => {
+    if (type === "budget") return <Wallet size={16} />;
+    if (type === "goal") return <Target size={16} />;
+    return <CalendarClock size={16} />;
+  };
+
+  const isActive = (path) =>
+    location.pathname === path ||
+    (path !== "/dashboard" && location.pathname.startsWith(`${path}/`));
 
   return (
     <nav
+      className="sm-navbar"
       style={{
-        minHeight: 70,
-        background: theme.card,
-        borderBottom: `1px solid ${theme.border}`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 18,
-        padding: "10px 24px",
-        position: "sticky",
-        top: 0,
-        zIndex: 100,
-        flexWrap: "wrap",
+        "--nav-card": theme.card,
+        "--nav-border": theme.border,
+        "--nav-text": theme.text,
+        "--nav-secondary": theme.secondary,
+        "--nav-primary": theme.primary,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 22,
-          flex: "1 1 650px",
-          minWidth: 0,
-        }}
-      >
+      <div className="sm-navbar-top">
         <button
           type="button"
-          onClick={() => {
-            navigate("/dashboard");
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          title="Go to dashboard"
-          className="splitmate-logo"
-          style={{
-            color: theme.primary,
-            fontWeight: 900,
-            fontSize: 23,
-            border: 0,
-            background: "transparent",
-            cursor: "pointer",
-            flexShrink: 0,
-            transition: "transform 0.2s ease",
-          }}
+          className="sm-brand"
+          onClick={() => goTo("/dashboard")}
+          aria-label="SplitMate home"
         >
           SplitMate
         </button>
 
-        <div
-          style={{
-            display: "flex",
-            gap: 3,
-            overflowX: "auto",
-            flex: 1,
-            minWidth: 0,
-            scrollbarWidth: "thin",
-            paddingBottom: 2,
+        <button
+          type="button"
+          className="sm-mobile-toggle"
+          aria-label={showMobileNav ? "Close navigation" : "Open navigation"}
+          aria-expanded={showMobileNav}
+          onClick={() => {
+            setShowMobileNav((open) => !open);
+            setShowNotifs(false);
+            setShowUserMenu(false);
           }}
         >
-          {navItems.map((item) => {
-            const active = location.pathname === item.path;
-
-            return (
-              <button
-                type="button"
-                key={item.path}
-                onClick={() => navigate(item.path)}
-                style={navButtonStyle(active)}
-                onMouseEnter={(e) => {
-                  if (!active) e.currentTarget.style.background = theme.hover;
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) e.currentTarget.style.background = "transparent";
-                }}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
+          {showMobileNav ? <X size={22} /> : <Menu size={22} />}
+        </button>
       </div>
 
       <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 14,
-          flexShrink: 0,
-        }}
+        className={`sm-nav-links ${showMobileNav ? "sm-nav-links-open" : ""}`}
       >
+        {navItems.map((item) => {
+          const active = isActive(item.path);
+
+          return (
+            <button
+              type="button"
+              key={item.path}
+              className={`sm-nav-link ${active ? "is-active" : ""}`}
+              onClick={() => goTo(item.path)}
+              aria-current={active ? "page" : undefined}
+            >
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="sm-navbar-actions">
         <button
           type="button"
+          className="sm-icon-button"
+          aria-label="Toggle theme"
+          title="Toggle theme"
           onClick={() => setIsDarkMode(!isDarkMode)}
-          title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-          aria-label="Toggle color theme"
-          style={{
-            border: 0,
-            background: "transparent",
-            color: theme.secondary,
-            cursor: "pointer",
-            display: "grid",
-            placeItems: "center",
-            padding: 7,
-          }}
         >
           {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
 
-        <button
-          type="button"
-          onClick={() => navigate("/notifications")}
-          title="View notifications"
-          aria-label="Open notifications"
-          style={{
-            position: "relative",
-            display: "grid",
-            placeItems: "center",
-            border: 0,
-            background: "transparent",
-            color: theme.secondary,
-            cursor: "pointer",
-            padding: 7,
-          }}
-        >
-          <Bell size={20} />
-          {(transactions.length > 0 ||
-            budgets.length > 0 ||
-            goals.length > 0) && (
-            <span
-              style={{
-                position: "absolute",
-                top: 0,
-                right: 0,
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                background: "#f59e0b",
-              }}
-            />
-          )}
-        </button>
-
-        <div style={{ position: "relative" }}>
+        <div className="sm-menu-anchor">
           <button
             type="button"
-            onClick={() => setShowUserMenu((current) => !current)}
+            className="sm-icon-button sm-notification-button"
+            aria-label="Notifications"
+            aria-expanded={showNotifs}
+            onClick={() => {
+              setShowNotifs((open) => !open);
+              setShowUserMenu(false);
+              setShowMobileNav(false);
+            }}
+          >
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="sm-notification-count">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {showNotifs && (
+            <div className="sm-dropdown sm-notifications">
+              <div className="sm-dropdown-heading">
+                <strong>Notifications</strong>
+                <button
+                  type="button"
+                  className="sm-text-button"
+                  onClick={markAllRead}
+                >
+                  Mark all read
+                </button>
+              </div>
+
+              {notifications.length === 0 ? (
+                <p className="sm-empty-message">No current notifications.</p>
+              ) : (
+                notifications.map((notification) => {
+                  const isRead = readNotificationIds.includes(notification.id);
+
+                  return (
+                    <div
+                      key={notification.id}
+                      className={`sm-notification-item ${
+                        isRead ? "" : "is-unread"
+                      }`}
+                    >
+                      <span className="sm-notification-item-icon">
+                        {notificationIcon(notification.type)}
+                      </span>
+
+                      <div className="sm-notification-copy">
+                        <strong>{notification.title}</strong>
+                        <p>{notification.message}</p>
+                      </div>
+
+                      {!isRead && (
+                        <span className="sm-unread-dot" aria-label="Unread" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              <button
+                type="button"
+                className="sm-dropdown-footer"
+                onClick={() => goTo("/notifications")}
+              >
+                View all notifications
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="sm-menu-anchor">
+          <button
+            type="button"
+            className="sm-profile-button"
+            aria-label="Open profile menu"
             aria-expanded={showUserMenu}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              border: 0,
-              background: "transparent",
-              cursor: "pointer",
-              color: theme.text,
+            onClick={() => {
+              setShowUserMenu((open) => !open);
+              setShowNotifs(false);
+              setShowMobileNav(false);
             }}
           >
             {userPhoto ? (
-              <img
-                src={userPhoto}
-                alt="Profile"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                  border: `2px solid ${theme.primary}`,
-                }}
-              />
+              <img className="sm-avatar" src={userPhoto} alt="Profile" />
             ) : (
-              <span
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "50%",
-                  display: "grid",
-                  placeItems: "center",
-                  background: "linear-gradient(135deg,#3b82f6,#6366f1)",
-                  color: "white",
-                  fontWeight: 800,
-                }}
-              >
-                {(userName.charAt(0) || "U").toUpperCase()}
+              <span className="sm-avatar sm-avatar-fallback">
+                {userInitial}
               </span>
             )}
 
-            <span style={{ fontSize: 13, fontWeight: 700 }}>
-              {userName.split(" ")[0]}
-            </span>
+            <span className="sm-profile-name">{userName.split(" ")[0]}</span>
+
             <ChevronDown size={14} />
           </button>
 
           {showUserMenu && (
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: 48,
-                width: 235,
-                background: theme.card,
-                color: theme.text,
-                border: `1px solid ${theme.border}`,
-                borderRadius: 14,
-                boxShadow: "0 16px 40px rgba(0,0,0,0.2)",
-                overflow: "hidden",
-                zIndex: 300,
-              }}
-            >
-              <div
-                style={{
-                  padding: 16,
-                  borderBottom: `1px solid ${theme.border}`,
-                }}
-              >
+            <div className="sm-dropdown sm-user-dropdown">
+              <div className="sm-user-details">
                 <strong>{userName}</strong>
-                <p
-                  style={{
-                    margin: "4px 0 0",
-                    color: theme.secondary,
-                    fontSize: 12,
-                    overflowWrap: "anywhere",
-                  }}
-                >
-                  {userEmail}
-                </p>
+                <span>{userEmail}</span>
               </div>
 
               <button
                 type="button"
-                onClick={() => {
-                  setShowUserMenu(false);
-                  navigate("/settings");
-                }}
-                style={{
-                  width: "100%",
-                  padding: 13,
-                  border: 0,
-                  background: "transparent",
-                  color: theme.text,
-                  textAlign: "left",
-                  cursor: "pointer",
-                }}
+                className="sm-dropdown-action"
+                onClick={() => goTo("/settings")}
               >
-                ⚙️ Settings
+                Settings
               </button>
 
               <button
                 type="button"
+                className="sm-dropdown-action sm-logout"
                 onClick={handleLogout}
-                style={{
-                  width: "100%",
-                  padding: 13,
-                  border: 0,
-                  background: "transparent",
-                  color: "#ef4444",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                }}
               >
-                <LogOut size={15} /> Log out
+                <LogOut size={16} />
+                Logout
               </button>
             </div>
           )}
         </div>
       </div>
-
-      {showUserMenu && (
-        <button
-          type="button"
-          aria-label="Close account menu"
-          onClick={() => setShowUserMenu(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 90,
-            background: "transparent",
-            border: 0,
-            cursor: "default",
-          }}
-        />
-      )}
     </nav>
   );
 };

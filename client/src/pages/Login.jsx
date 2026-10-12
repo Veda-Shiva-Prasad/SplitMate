@@ -1,202 +1,283 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import API from "../utils/api";
+import axios from "axios";
 import { useData } from "../context/DataContext";
 import "./Auth.css";
 
-function getSavedTheme() {
-  try {
-    return localStorage.getItem("splitmate-theme") === "dark"
-      ? "dark"
-      : "light";
-  } catch {
-    return "light";
-  }
-}
+const API_URL = (
+  process.env.REACT_APP_API_URL || "https://splitmate-0a2j.onrender.com/api"
+).replace(/\/+$/, "");
 
-export default function Login() {
+const Login = () => {
   const navigate = useNavigate();
   const { refreshData } = useData();
 
-  const [theme, setTheme] = useState(getSavedTheme);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [darkMode, setDarkMode] = useState(
+    () => localStorage.getItem("splitmate_auth_theme") === "dark",
+  );
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem("splitmate-theme", theme);
-    } catch {
-      // Theme still works for this page if storage is unavailable.
-    }
-  }, [theme]);
+    document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+    localStorage.setItem("splitmate_auth_theme", darkMode ? "dark" : "light");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    return () => {
+      // Preserve the selected theme for the next authentication page.
+    };
+  }, [darkMode]);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+
     setError("");
+  };
 
-    if (!email.trim() || !password) {
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (busy) return;
+
+    const email = formData.email.trim().toLowerCase();
+    const password = formData.password;
+
+    if (!email || !password) {
       setError("Please enter your email and password.");
       return;
     }
 
-    try {
-      setIsSubmitting(true);
+    setBusy(true);
+    setError("");
 
-      const response = await API.post("/auth/login", {
-        email: email.trim().toLowerCase(),
+    try {
+      const response = await axios.post(`${API_URL}/auth/login`, {
+        email,
         password,
       });
 
-      const data = response.data;
+      const { token, user } = response.data || {};
 
-      if (!data?.token || !data?.user) {
-        throw new Error("The server returned an incomplete login response.");
+      if (!token || !user) {
+        throw new Error("The server returned an invalid login response.");
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      localStorage.setItem("userName", data.user.name || "");
-      localStorage.setItem("userEmail", data.user.email || "");
+      ["user", "userName", "userEmail", "userPhone", "userPhoto"].forEach(
+        (key) => localStorage.removeItem(key),
+      );
 
-      await refreshData();
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("userName", user.name || "");
+      localStorage.setItem("userEmail", user.email || "");
+      localStorage.setItem("userPhone", user.phone || "");
+
+      if (user.profilePhoto) {
+        localStorage.setItem("userPhoto", user.profilePhoto);
+      }
+
       navigate("/dashboard", { replace: true });
-    } catch (err) {
+
+      Promise.resolve()
+        .then(() => refreshData())
+        .catch((refreshError) => {
+          console.error("Dashboard refresh failed:", refreshError);
+        });
+    } catch (requestError) {
       setError(
-        err.response?.data?.message ||
-          err.message ||
+        requestError.response?.data?.message ||
+          requestError.message ||
           "Unable to log in. Please try again.",
       );
     } finally {
-      setIsSubmitting(false);
+      setBusy(false);
     }
   };
 
   return (
     <main className="auth-page">
       <header className="auth-topbar">
-        <Link to="/login" className="auth-brand" aria-label="SplitMate home">
-          <span className="auth-brand-mark">S</span>
+        <Link className="auth-brand" to="/login" aria-label="SplitMate login">
+          <span className="auth-brand-mark" aria-hidden="true">
+            S
+          </span>
           <span>SplitMate</span>
         </Link>
 
         <button
           type="button"
           className="auth-theme-toggle"
-          onClick={() =>
-            setTheme((current) => (current === "light" ? "dark" : "light"))
-          }
-          aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
-          title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+          onClick={() => setDarkMode((previous) => !previous)}
+          aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          title={darkMode ? "Light mode" : "Dark mode"}
         >
-          {theme === "light" ? "☾" : "☀"}
+          {darkMode ? "☀" : "☾"}
         </button>
       </header>
 
-      <section className="auth-layout">
-        <aside className="auth-visual">
+      <div className="auth-layout">
+        <section className="auth-visual">
           <div className="auth-visual-content">
-            <span className="auth-eyebrow">✦ Smart expense management</span>
-            <h1>Make shared expenses feel simple.</h1>
+            <span className="auth-eyebrow">
+              <span aria-hidden="true">✦</span>
+              Smarter money management
+            </span>
+
+            <h1>
+              Take control
+              <br />
+              of your finances.
+            </h1>
+
             <p>
-              Keep track of spending, manage shared costs, and understand where
-              your money goes—all in one place.
+              Understand your spending, organize your budgets, and stay focused
+              on your financial goals with SplitMate.
             </p>
 
             <div className="auth-feature-list">
               <div className="auth-feature">
-                <span className="auth-feature-icon">↗</span>
-                <span>Track expenses and spending</span>
+                <span className="auth-feature-icon" aria-hidden="true">
+                  ✓
+                </span>
+                <span>Track your expenses in one place</span>
               </div>
+
               <div className="auth-feature">
-                <span className="auth-feature-icon">◎</span>
-                <span>Organize budgets and savings goals</span>
+                <span className="auth-feature-icon" aria-hidden="true">
+                  ◈
+                </span>
+                <span>Manage budgets and financial goals</span>
               </div>
+
               <div className="auth-feature">
-                <span className="auth-feature-icon">⇄</span>
-                <span>Manage money owed and settlements</span>
+                <span className="auth-feature-icon" aria-hidden="true">
+                  ↗
+                </span>
+                <span>Make more informed money decisions</span>
               </div>
             </div>
           </div>
-        </aside>
 
-        <section className="auth-form-panel">
-          <h2 className="auth-heading">Welcome back </h2>
-          <p className="auth-subheading">
-            Sign in to continue to your SplitMate account.
-          </p>
-
-          {error && (
-            <div className="auth-error" role="alert">
-              {error}
-            </div>
-          )}
-
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <div className="auth-field">
-              <label htmlFor="login-email">Email address</label>
-              <input
-                id="login-email"
-                className="auth-input"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                required
-                disabled={isSubmitting}
-              />
-            </div>
-
-            <div className="auth-field">
-              <label htmlFor="login-password">Password</label>
-              <div className="auth-input-wrap">
-                <input
-                  id="login-password"
-                  className="auth-input auth-input-password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  required
-                  disabled={isSubmitting}
-                />
-                <button
-                  type="button"
-                  className="auth-password-toggle"
-                  onClick={() => setShowPassword((current) => !current)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              className="auth-button"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? "Signing in..." : "Sign in to SplitMate →"}
-            </button>
-          </form>
-
-          <p className="auth-footer">
-            New to SplitMate?{" "}
-            <Link to="/register" className="auth-link">
-              Create an account
-            </Link>
-          </p>
-
-          <p className="auth-security-note">
-            ♢ Your account and expense data stay protected by your login.
-          </p>
+          <div className="auth-visual-decoration" aria-hidden="true">
+            <span className="auth-decoration-circle auth-circle-one" />
+            <span className="auth-decoration-circle auth-circle-two" />
+          </div>
         </section>
-      </section>
+
+        <section className="auth-form-panel" aria-labelledby="login-heading">
+          <div className="auth-form-content">
+            <span className="auth-form-kicker">WELCOME BACK</span>
+
+            <h2 className="auth-heading" id="login-heading">
+              Sign in to SplitMate
+            </h2>
+
+            <p className="auth-subheading">
+              Enter your account details to continue.
+            </p>
+
+            {error && (
+              <div className="auth-error" role="alert" aria-live="polite">
+                <span aria-hidden="true">!</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <form className="auth-form" onSubmit={handleSubmit}>
+              <div className="auth-field">
+                <label htmlFor="login-email">Email address</label>
+                <input
+                  className="auth-input"
+                  id="login-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  placeholder="you@example.com"
+                  maxLength={254}
+                  required
+                  disabled={busy}
+                />
+              </div>
+
+              <div className="auth-field">
+                <label htmlFor="login-password">Password</label>
+
+                <div className="auth-input-wrap">
+                  <input
+                    className="auth-input auth-input-password"
+                    id="login-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Enter your password"
+                    required
+                    disabled={busy}
+                  />
+
+                  <button
+                    type="button"
+                    className="auth-password-toggle"
+                    onClick={() => setShowPassword((previous) => !previous)}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    aria-pressed={showPassword}
+                    disabled={busy}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              <button className="auth-button" type="submit" disabled={busy}>
+                {busy ? (
+                  <>
+                    <span className="auth-spinner" aria-hidden="true" />
+                    Signing in...
+                  </>
+                ) : (
+                  <>
+                    Sign In
+                    <span aria-hidden="true">→</span>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <p className="auth-footer">
+              Don't have an account?{" "}
+              <Link className="auth-link" to="/register">
+                Create an account
+              </Link>
+            </p>
+
+            <p className="auth-security-note">
+              <span aria-hidden="true">▣</span> Your account is protected by
+              secure authentication.
+            </p>
+          </div>
+        </section>
+      </div>
+
+      <footer className="auth-page-footer">
+        Made for better financial habits.
+      </footer>
     </main>
   );
-}
+};
+
+export default Login;

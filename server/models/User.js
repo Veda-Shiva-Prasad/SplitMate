@@ -1,31 +1,43 @@
 const mongoose = require("mongoose");
 
-const userSchema = new mongoose.Schema(
+const UserSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: [true, "Please add a name"],
+      required: true,
       trim: true,
-      minlength: [2, "Name must contain at least 2 characters"],
-      maxlength: [80, "Name cannot exceed 80 characters"],
+      minlength: 2,
+      maxlength: 80,
     },
 
     email: {
       type: String,
-      required: [true, "Please add an email"],
+      required: true,
       unique: true,
       lowercase: true,
       trim: true,
       maxlength: 254,
-      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Please add a valid email"],
     },
 
     password: {
       type: String,
-      required: [true, "Please add a password"],
-      minlength: [6, "Password must contain at least 6 characters"],
-      maxlength: [128, "Password cannot exceed 128 characters"],
+      required: true,
+      minlength: 6,
+      maxlength: 128,
       select: false,
+    },
+
+    phone: {
+      type: String,
+      trim: true,
+      maxlength: 30,
+      default: "",
+    },
+
+    profilePhoto: {
+      type: String,
+      default: "",
+      maxlength: 3000000,
     },
   },
   {
@@ -33,4 +45,4 @@ const userSchema = new mongoose.Schema(
   },
 );
 
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.models.User || mongoose.model("User", UserSchema);

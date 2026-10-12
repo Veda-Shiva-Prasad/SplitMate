@@ -1,13 +1,6 @@
-/* Import Google Fonts */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap");
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
+:root {
   font-family:
     "Inter",
     -apple-system,
@@ -18,14 +11,96 @@ body {
     Ubuntu,
     Cantarell,
     sans-serif;
-  margin: 0;
-  padding: 0;
-  overflow-x: hidden;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Global Animations - No Tailwind */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
-/* Fade In Up Animation */
+html {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: clip;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+}
+
+img {
+  height: auto;
+}
+
+#root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+}
+
+main,
+section,
+article,
+header,
+footer,
+aside,
+form {
+  min-width: 0;
+}
+
+table {
+  max-width: 100%;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+}
+
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -37,7 +112,6 @@ body {
   }
 }
 
-/* Fade In Animation */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -47,7 +121,6 @@ body {
   }
 }
 
-/* Slide In Left Animation */
 @keyframes slideInLeft {
   from {
     opacity: 0;
@@ -59,7 +132,6 @@ body {
   }
 }
 
-/* Slide In Right Animation */
 @keyframes slideInRight {
   from {
     opacity: 0;
@@ -71,7 +143,6 @@ body {
   }
 }
 
-/* Scale In Animation */
 @keyframes scaleIn {
   from {
     opacity: 0;
@@ -83,7 +154,6 @@ body {
   }
 }
 
-/* Bounce In Animation */
 @keyframes bounceIn {
   0% {
     opacity: 0;
@@ -102,7 +172,6 @@ body {
   }
 }
 
-/* Pulse Animation for Notifications */
 @keyframes pulse {
   0% {
     transform: scale(1);
@@ -115,7 +184,6 @@ body {
   }
 }
 
-/* Shimmer Effect for Loading */
 @keyframes shimmer {
   0% {
     background-position: -1000px 0;
@@ -125,7 +193,6 @@ body {
   }
 }
 
-/* Animation Classes */
 .animate-fadeInUp {
   animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
@@ -154,7 +221,6 @@ body {
   animation: pulse 0.5s ease-in-out;
 }
 
-/* Stagger Children Animation */
 .stagger-children > * {
   opacity: 0;
   animation: fadeInUp 0.5s ease-out forwards;
@@ -163,29 +229,35 @@ body {
 .stagger-children > *:nth-child(1) {
   animation-delay: 0s;
 }
+
 .stagger-children > *:nth-child(2) {
   animation-delay: 0.08s;
 }
+
 .stagger-children > *:nth-child(3) {
   animation-delay: 0.16s;
 }
+
 .stagger-children > *:nth-child(4) {
   animation-delay: 0.24s;
 }
+
 .stagger-children > *:nth-child(5) {
   animation-delay: 0.32s;
 }
+
 .stagger-children > *:nth-child(6) {
   animation-delay: 0.4s;
 }
+
 .stagger-children > *:nth-child(7) {
   animation-delay: 0.48s;
 }
+
 .stagger-children > *:nth-child(8) {
   animation-delay: 0.56s;
 }
 
-/* Hover Effects */
 .hover-lift {
   transition:
     transform 0.3s ease,
@@ -194,7 +266,7 @@ body {
 
 .hover-lift:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 25px -12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 20px 25px -12px rgb(0 0 0 / 20%);
 }
 
 .hover-glow {
@@ -204,7 +276,7 @@ body {
 }
 
 .hover-glow:hover {
-  box-shadow: 0 0 20px rgba(79, 70, 229, 0.4);
+  box-shadow: 0 0 20px rgb(79 70 229 / 40%);
   transform: translateY(-2px);
 }
 
@@ -216,157 +288,104 @@ body {
   transform: scale(1.02);
 }
 
-/* Loading Shimmer */
 .shimmer {
   background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
   background-size: 1000px 100%;
   animation: shimmer 1.5s infinite;
 }
 
-/* Scrollbar Styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(0 0 0 / 5%);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(79, 70, 229, 0.3);
+  background: rgb(79 70 229 / 30%);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(79, 70, 229, 0.5);
+  background: rgb(79 70 229 / 50%);
 }
-
-/* ============================================ */
-/* MOBILE RESPONSIVE STYLES */
-/* ============================================ */
 
 @media (max-width: 1024px) {
   main {
-    padding: 30px 32px !important;
-  }
-}
-
-@media (max-width: 768px) {
-  main {
-    padding: 20px !important;
-  }
-
-  .stagger-children {
-    grid-template-columns: 1fr !important;
-  }
-
-  [style*="grid-template-columns: repeat(4, 1fr)"] {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
-  }
-
-  [style*="grid-template-columns: 2fr 1fr"] {
-    grid-template-columns: 1fr !important;
-    gap: 20px !important;
-  }
-
-  [style*="grid-template-columns: 1.5fr 1fr 1fr"] {
-    grid-template-columns: 1fr !important;
-    gap: 20px !important;
-  }
-
-  nav {
-    padding: 0 16px !important;
-  }
-
-  nav > div:first-child {
-    gap: 12px !important;
-    flex-wrap: wrap;
-  }
-
-  nav button {
-    padding: 5px 8px !important;
-    font-size: 11px !important;
-  }
-
-  h1 {
-    font-size: 24px !important;
-  }
-
-  h2 {
-    font-size: 20px !important;
-  }
-
-  .modal-content {
-    width: 90% !important;
-    margin: 16px !important;
-    padding: 20px !important;
+    max-width: 100%;
   }
 }
 
 @media (max-width: 640px) {
-  nav {
-    flex-direction: column;
-    height: auto !important;
-    padding: 12px 16px !important;
-    gap: 12px;
-  }
-
-  nav > div:first-child {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  nav > div:last-child {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .nav-links {
-    overflow-x: auto;
-    padding-bottom: 4px;
+  .stagger-children {
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 
   .stat-card {
-    padding: 16px !important;
+    min-width: 0;
+    padding: 16px;
   }
 
-  button {
-    padding: 10px 16px !important;
-    font-size: 13px !important;
+  .modal-content {
+    width: calc(100% - 24px);
+    max-width: 520px;
+    margin: 12px auto;
+    padding: 18px;
+  }
+
+  .table-responsive,
+  .table-container,
+  .transactions-table-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
-@media (max-width: 480px) {
-  main {
-    padding: 16px !important;
-  }
-
-  h1 {
-    font-size: 20px !important;
-  }
-
-  h2 {
-    font-size: 18px !important;
-  }
-
-  p {
-    font-size: 12px !important;
-  }
-
+@media (max-width: 380px) {
   .stat-card {
-    padding: 12px !important;
+    padding: 12px;
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dashboard: keep the chart and insight cards within the viewport. */
+.dashboard-chart-layout {
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-chart-layout > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 @media (max-width: 760px) {
-  .settings-layout {
+  .dashboard-chart-layout {
     grid-template-columns: minmax(0, 1fr) !important;
   }
+}
 
-  .settings-fields {
-    grid-template-columns: minmax(0, 1fr) !important;
+@media (max-width: 380px) {
+  .dashboard-chart-layout > * {
+    padding: 14px !important;
+  }
+
+  .dashboard-chart-layout h3 {
+    overflow-wrap: anywhere;
   }
 }

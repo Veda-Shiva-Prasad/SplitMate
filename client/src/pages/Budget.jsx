@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Edit2, Trash2, X, RefreshCw } from "lucide-react";
+import React, { useState, useEffect } from "react";
+
+import { Edit2, Trash2, Plus, X } from "lucide-react";
+
 import {
   BarChart,
   Bar,
@@ -8,285 +10,250 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  Legend,
 } from "recharts";
+
 import Navbar from "../components/Navbar.jsx";
+
 import API from "../utils/api";
 
-const CATEGORIES = [
-  "Food",
-  "Transport",
-  "Bills",
-  "Entertainment",
-  "Health",
-  "Shopping",
-  "Other",
-];
-
-const COLORS = {
+const CATEGORY_COLORS = {
   Food: "#F59E0B",
+
   Transport: "#3B82F6",
+
   Bills: "#8B5CF6",
+
   Entertainment: "#EC4899",
+
   Health: "#10B981",
+
   Shopping: "#F43F5E",
+
   Other: "#94A3B8",
 };
 
-const money = (value) =>
-  `₹${Math.round(Number(value) || 0).toLocaleString("en-IN")}`;
-
-const getExpenseDate = (expense) => {
-  const value = expense.rawDate || expense.date;
-  if (!value) return null;
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const getExpenseAmount = (expense) => Math.abs(Number(expense.amount) || 0);
-
-export default function Budget({ isDarkMode, setIsDarkMode }) {
+const Budget = ({ isDarkMode, setIsDarkMode }) => {
   const [budgets, setBudgets] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [monthlyLimit, setMonthlyLimit] = useState(20000);
-  const [limitInput, setLimitInput] = useState("20000");
-  const [form, setForm] = useState({ category: "Food", limit: "" });
-  const [editing, setEditing] = useState(null);
-  const [showBudgetForm, setShowBudgetForm] = useState(false);
-  const [showLimitForm, setShowLimitForm] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
 
-  const dark = Boolean(isDarkMode);
+  const [monthlyLimit, setMonthlyLimit] = useState(20000);
+
+  const [showModal, setShowModal] = useState(false);
+
+  const [showLimitModal, setShowLimitModal] = useState(false);
+
+  const [editItem, setEditItem] = useState(null);
+
+  const [form, setForm] = useState({ category: "Food", limit: "" });
+
+  const [newLimit, setNewLimit] = useState("");
+
+  const [carryOver, setCarryOver] = useState(false);
+
+  const [loading, setLoading] = useState(true);
+
+  const [savingLimit, setSavingLimit] = useState(false);
+
+  const [pageLoaded, setPageLoaded] = useState(false);
+
+  useEffect(() => {
+    setPageLoaded(true);
+
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+
+    try {
+      const [budgetsRes, expensesRes] = await Promise.all([
+        API.get("/budgets"),
+        API.get("/expenses"),
+      ]);
+      const now = new Date();
+      const currentExpenses = (expensesRes.data || []).filter((tx) => {
+        const dt = new Date(tx.rawDate);
+        return (
+          !Number.isNaN(dt.getTime()) &&
+          dt.getFullYear() === now.getFullYear() &&
+          dt.getMonth() === now.getMonth()
+        );
+      });
+      setMonthlySpent(
+        currentExpenses.reduce(
+          (sum, tx) => sum + Math.abs(Number(tx.amount) || 0),
+          0,
+        ),
+      );
+
+      setBudgets(budgetsRes.data);
+
+      const limitRes = await API.get("/budgets/limit");
+
+      const limit = limitRes.data?.limit || 20000;
+
+      setMonthlyLimit(limit);
+
+      setNewLimit(limit);
+    } catch (error) {
+      console.error("Error fetching budgets:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openAdd = () => {
+    setEditItem(null);
+
+    setForm({ category: "Food", limit: "" });
+
+    setShowModal(true);
+  };
+
+  const openEdit = (item) => {
+    setEditItem(item);
+
+    setForm({ category: item.category, limit: item.limit });
+
+    setShowModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    try {
+      await API.delete(`/budgets/${id}`);
+
+      fetchData();
+    } catch (error) {
+      console.error("Error deleting budget:", error);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.limit) return;
+
+    try {
+      await API.post("/budgets", {
+        category: form.category,
+
+        limit: +form.limit,
+      });
+
+      setShowModal(false);
+
+      fetchData();
+    } catch (error) {
+      console.error("Error saving budget:", error);
+    }
+  };
+
+  const handleSaveLimit = async () => {
+    if (!newLimit || isNaN(newLimit) || +newLimit <= 0) {
+      alert("Please enter a valid amount");
+
+      return;
+    }
+
+    setSavingLimit(true);
+
+    try {
+      await API.put("/budgets/limit", { limit: +newLimit });
+
+      setMonthlyLimit(+newLimit);
+
+      setShowLimitModal(false);
+
+      await fetchData();
+
+      alert(`Budget limit updated to ₹${(+newLimit).toLocaleString("en-IN")}`);
+    } catch (error) {
+      console.error("Error updating limit:", error);
+
+      alert("Failed to update budget limit. Please try again.");
+    } finally {
+      setSavingLimit(false);
+    }
+  };
+
+  const [monthlySpent, setMonthlySpent] = useState(0);
+  const totalSpent = monthlySpent;
 
   const theme = {
-    bg: dark ? "#0A0F1E" : "#F1F5F9",
-    card: dark ? "#111827" : "#FFFFFF",
-    border: dark ? "#263449" : "#E2E8F0",
-    text: dark ? "#F1F5F9" : "#1E293B",
-    secondary: dark ? "#94A3B8" : "#64748B",
+    bg: isDarkMode ? "#0A0F1E" : "#F1F5F9",
+
+    card: isDarkMode ? "#111827" : "#FFFFFF",
+
+    border: isDarkMode ? "#1E2D45" : "#E2E8F0",
+
+    text: isDarkMode ? "#F1F5F9" : "#1E293B",
+
+    secondary: isDarkMode ? "#94A3B8" : "#64748B",
+
     primary: "#3B82F6",
   };
 
   const inputStyle = {
     width: "100%",
-    boxSizing: "border-box",
-    padding: "11px 12px",
-    marginTop: 7,
-    border: `1px solid ${theme.border}`,
-    borderRadius: 9,
+
+    padding: "12px 16px",
+
     background: theme.bg,
-    color: theme.text,
-    fontSize: 14,
-  };
 
-  const cardStyle = {
-    background: theme.card,
     border: `1px solid ${theme.border}`,
-    borderRadius: 16,
-    padding: 22,
+
+    borderRadius: "12px",
+
+    color: theme.text,
+
+    fontSize: "14px",
+
+    outline: "none",
+
+    boxSizing: "border-box",
+
+    marginTop: "8px",
+
+    fontFamily: "'Inter', sans-serif",
+
+    transition: "all 0.2s ease",
   };
 
-  const buttonStyle = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    border: 0,
-    borderRadius: 9,
-    padding: "10px 14px",
-    background: theme.primary,
-    color: "#fff",
-    fontWeight: 700,
-    cursor: "pointer",
-  };
+  const historyData =
+    budgets.length > 0
+      ? [
+          {
+            month: "This Month",
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setError("");
-
-    try {
-      const [budgetsRes, limitRes, expensesRes] = await Promise.all([
-        API.get("/budgets"),
-        API.get("/budgets/limit"),
-        API.get("/expenses"),
-      ]);
-
-      setBudgets(Array.isArray(budgetsRes.data) ? budgetsRes.data : []);
-
-      setExpenses(Array.isArray(expensesRes.data) ? expensesRes.data : []);
-
-      const limit = Number(limitRes.data?.limit) || 20000;
-      setMonthlyLimit(limit);
-      setLimitInput(String(limit));
-    } catch (err) {
-      console.error("Budget loading error:", err);
-      setError(
-        err.response?.data?.message ||
-          "Could not load budgets. Please try again.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const currentMonthExpenses = useMemo(() => {
-    const now = new Date();
-
-    return expenses.filter((expense) => {
-      const date = getExpenseDate(expense);
-
-      return (
-        date &&
-        date.getFullYear() === now.getFullYear() &&
-        date.getMonth() === now.getMonth()
-      );
-    });
-  }, [expenses]);
-
-  const spendingByCategory = useMemo(() => {
-    const result = {};
-
-    currentMonthExpenses.forEach((expense) => {
-      const category = CATEGORIES.includes(expense.category)
-        ? expense.category
-        : "Other";
-
-      result[category] = (result[category] || 0) + getExpenseAmount(expense);
-    });
-
-    return result;
-  }, [currentMonthExpenses]);
-
-  const totalSpent = useMemo(
-    () =>
-      currentMonthExpenses.reduce(
-        (sum, expense) => sum + getExpenseAmount(expense),
-        0,
-      ),
-    [currentMonthExpenses],
-  );
-
-  const chartData = useMemo(
-    () =>
-      CATEGORIES.map((category) => ({
-        category,
-        spent: spendingByCategory[category] || 0,
-        limit:
-          Number(
-            budgets.find((budget) => budget.category === category)?.limit,
-          ) || 0,
-      })),
-    [spendingByCategory, budgets],
-  );
-
-  const monthlyPercentage =
-    monthlyLimit > 0 ? Math.round((totalSpent / monthlyLimit) * 100) : 0;
-
-  const openAddForm = () => {
-    setEditing(null);
-    setForm({ category: "Food", limit: "" });
-    setError("");
-    setShowBudgetForm(true);
-  };
-
-  const openEditForm = (budget) => {
-    setEditing(budget);
-    setForm({
-      category: budget.category,
-      limit: String(budget.limit),
-    });
-    setError("");
-    setShowBudgetForm(true);
-  };
-
-  const saveBudget = async (event) => {
-    event.preventDefault();
-
-    const limit = Number(form.limit);
-
-    if (!Number.isFinite(limit) || limit <= 0) {
-      setError("Enter a valid budget limit greater than zero.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    try {
-      await API.post("/budgets", {
-        category: form.category,
-        limit,
-      });
-
-      setShowBudgetForm(false);
-      setEditing(null);
-      await fetchData();
-    } catch (err) {
-      setError(
-        err.response?.data?.message || "Could not save the category budget.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const deleteBudget = async (id) => {
-    if (!window.confirm("Delete this category budget?")) return;
-
-    setError("");
-
-    try {
-      await API.delete(`/budgets/${id}`);
-      await fetchData();
-    } catch (err) {
-      setError(err.response?.data?.message || "Could not delete this budget.");
-    }
-  };
-
-  const saveMonthlyLimit = async (event) => {
-    event.preventDefault();
-
-    const limit = Number(limitInput);
-
-    if (!Number.isFinite(limit) || limit <= 0) {
-      setError("Enter a valid monthly limit greater than zero.");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    try {
-      await API.put("/budgets/limit", { limit });
-      setShowLimitForm(false);
-      await fetchData();
-    } catch (err) {
-      setError(
-        err.response?.data?.message || "Could not update the monthly limit.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
+            ...Object.fromEntries(budgets.map((b) => [b.category, b.spent])),
+          },
+        ]
+      : [{ month: "No Data", amount: 0 }];
 
   if (loading) {
     return (
       <div
         style={{
+          backgroundColor: theme.bg,
+
           minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: theme.bg,
-          color: theme.text,
+
+          display: "flex",
+
+          alignItems: "center",
+
+          justifyContent: "center",
         }}
       >
-        <div>Loading budgets...</div>
+        <div
+          style={{
+            color: theme.text,
+
+            fontSize: "18px",
+
+            fontFamily: "'Inter', sans-serif",
+          }}
+        >
+          Loading budgets...
+        </div>
       </div>
     );
   }
@@ -294,488 +261,1114 @@ export default function Budget({ isDarkMode, setIsDarkMode }) {
   return (
     <div
       style={{
+        backgroundColor: theme.bg,
+
         minHeight: "100vh",
-        background: theme.bg,
+
         color: theme.text,
-        fontFamily: "Inter, sans-serif",
+
+        opacity: pageLoaded ? 1 : 0,
+
+        transform: pageLoaded ? "translateY(0)" : "translateY(20px)",
+
+        transition: "opacity 0.5s ease-out, transform 0.5s ease-out",
+
+        fontFamily: "'Inter', sans-serif",
       }}
     >
       <Navbar isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
 
       <main
         style={{
+          width: "100%",
           maxWidth: 1800,
           margin: "0 auto",
-          padding: "28px clamp(16px, 3vw, 40px)",
+          padding: "clamp(16px, 4vw, 36px) clamp(12px, 4vw, 40px)",
+          boxSizing: "border-box",
+          minWidth: 0,
         }}
       >
-        <header
+        <div
           style={{
             display: "flex",
+
             justifyContent: "space-between",
+
             alignItems: "center",
-            gap: 16,
-            flexWrap: "wrap",
-            marginBottom: 24,
+
+            marginBottom: "28px",
           }}
         >
-          <div>
-            <h1 style={{ margin: 0, fontSize: 28 }}>Budget Planner</h1>
-            <p style={{ color: theme.secondary, margin: "7px 0 0" }}>
+          <div className="animate-fadeInUp">
+            <h1
+              style={{
+                fontSize: "28px",
+
+                fontWeight: "800",
+
+                margin: 0,
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              Budget Planner
+            </h1>
+
+            <p
+              style={{
+                color: theme.secondary,
+
+                margin: "4px 0 0 0",
+
+                fontSize: "14px",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
               Manage and track your monthly spending limits
             </p>
           </div>
 
-          <button style={buttonStyle} onClick={openAddForm}>
-            <Plus size={17} /> Add Budget
-          </button>
-        </header>
-
-        {error && (
-          <div
-            role="alert"
+          <button
+            onClick={openAdd}
+            className="hover-glow"
             style={{
-              ...cardStyle,
-              marginBottom: 20,
-              color: "#F43F5E",
+              backgroundColor: theme.primary,
+
+              color: "white",
+
+              border: "none",
+
+              padding: "12px 22px",
+
+              borderRadius: "12px",
+
+              fontWeight: "bold",
+
+              cursor: "pointer",
+
+              display: "flex",
+
+              alignItems: "center",
+
+              gap: "8px",
+
+              fontFamily: "'Inter', sans-serif",
+
+              transition: "all 0.2s ease",
             }}
           >
-            {error}
-            <button
-              onClick={fetchData}
-              style={{ ...buttonStyle, marginLeft: 12 }}
-            >
-              <RefreshCw size={14} /> Retry
-            </button>
-          </div>
-        )}
+            <Plus size={18} /> Add Budget
+          </button>
+        </div>
 
-        <section style={{ ...cardStyle, marginBottom: 24 }}>
+        {/* Overall Budget Card */}
+
+        <div
+          className="animate-scaleIn"
+          style={{
+            backgroundColor: theme.card,
+
+            padding: "28px",
+
+            borderRadius: "20px",
+
+            border: `1px solid ${theme.border}`,
+
+            marginBottom: "24px",
+          }}
+        >
           <div
             style={{
               display: "flex",
-              alignItems: "center",
+
               justifyContent: "space-between",
+
+              alignItems: "flex-start",
+
+              marginBottom: "20px",
+
               flexWrap: "wrap",
-              gap: 16,
-              marginBottom: 18,
+
+              gap: "16px",
             }}
           >
             <div>
-              <div
+              <p
                 style={{
                   color: theme.secondary,
-                  fontSize: 12,
-                  fontWeight: 800,
-                  marginBottom: 7,
+
+                  margin: "0 0 4px 0",
+
+                  fontSize: "13px",
+
+                  fontWeight: "700",
+
+                  fontFamily: "'Inter', sans-serif",
                 }}
               >
                 OVERALL MONTHLY BUDGET
-              </div>
+              </p>
 
-              <div style={{ fontSize: 26, fontWeight: 800 }}>
-                {money(totalSpent)}{" "}
-                <span style={{ fontSize: 16, color: theme.secondary }}>
-                  / {money(monthlyLimit)}
-                </span>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "16px" }}
+              >
+                <h2
+                  style={{
+                    margin: 0,
+
+                    fontSize: "32px",
+
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                >
+                  ₹{(totalSpent || 0).toLocaleString("en-IN")}{" "}
+                  <span style={{ color: theme.secondary, fontSize: "18px" }}>
+                    / ₹{(monthlyLimit || 0).toLocaleString("en-IN")}
+                  </span>
+                </h2>
+
+                <button
+                  onClick={() => {
+                    setNewLimit(monthlyLimit);
+
+                    setShowLimitModal(true);
+                  }}
+                  className="hover-scale"
+                  style={{
+                    background: `${theme.primary}20`,
+
+                    color: theme.primary,
+
+                    border: `1px solid ${theme.primary}40`,
+
+                    padding: "6px 14px",
+
+                    borderRadius: "8px",
+
+                    cursor: "pointer",
+
+                    fontWeight: "700",
+
+                    fontSize: "12px",
+
+                    fontFamily: "'Inter', sans-serif",
+                  }}
+                >
+                  ✏️ Change Limit
+                </button>
               </div>
             </div>
 
-            <button
-              style={{
-                ...buttonStyle,
-                color: theme.primary,
-                background: `${theme.primary}18`,
-                border: `1px solid ${theme.primary}55`,
-              }}
-              onClick={() => {
-                setLimitInput(String(monthlyLimit));
-                setError("");
-                setShowLimitForm(true);
-              }}
-            >
-              Change Limit
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span
+                style={{
+                  fontSize: "13px",
+
+                  color: theme.secondary,
+
+                  fontWeight: "600",
+
+                  fontFamily: "'Inter', sans-serif",
+                }}
+              >
+                Carry-over (not yet available)
+              </span>
+
+              <div
+                onClick={() => alert("Carry-over is not available yet.")}
+                style={{
+                  width: "48px",
+
+                  height: "26px",
+
+                  borderRadius: "13px",
+
+                  background: carryOver ? theme.primary : theme.border,
+
+                  cursor: "pointer",
+
+                  position: "relative",
+
+                  transition: "background 0.2s",
+                }}
+              >
+                <div
+                  style={{
+                    width: "20px",
+
+                    height: "20px",
+
+                    borderRadius: "50%",
+
+                    background: "white",
+
+                    position: "absolute",
+
+                    top: "3px",
+
+                    left: carryOver ? "25px" : "3px",
+
+                    transition: "left 0.2s",
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
           <div
             style={{
-              height: 9,
+              height: "10px",
+
               background: theme.border,
-              borderRadius: 10,
-              overflow: "hidden",
+
+              borderRadius: "10px",
             }}
           >
             <div
               style={{
-                width: `${Math.min(monthlyPercentage, 100)}%`,
+                width: `${Math.min(((totalSpent || 0) / (monthlyLimit || 1)) * 100, 100)}%`,
+
                 height: "100%",
+
                 background:
-                  monthlyPercentage >= 100 ? "#F43F5E" : theme.primary,
-                transition: "width 0.25s ease",
+                  (totalSpent || 0) / (monthlyLimit || 1) > 0.8
+                    ? "#F43F5E"
+                    : theme.primary,
+
+                borderRadius: "10px",
+
+                transition: "width 0.8s ease",
               }}
             />
           </div>
 
-          <p style={{ fontSize: 12, color: theme.secondary, marginBottom: 0 }}>
-            {monthlyPercentage}% used —{" "}
-            {totalSpent > monthlyLimit
-              ? `${money(totalSpent - monthlyLimit)} over budget`
-              : `${money(monthlyLimit - totalSpent)} remaining`}
+          <p
+            style={{
+              color: theme.secondary,
+
+              fontSize: "13px",
+
+              margin: "8px 0 0 0",
+
+              fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            {Math.round(((totalSpent || 0) / (monthlyLimit || 1)) * 100)}% used
+            — ₹
+            {((monthlyLimit || 0) - (totalSpent || 0)).toLocaleString("en-IN")}{" "}
+            remaining
           </p>
-        </section>
+        </div>
+
+        {/* Budget Cards */}
 
         {budgets.length === 0 ? (
-          <section
+          <div
+            className="animate-fadeInUp"
             style={{
-              ...cardStyle,
+              backgroundColor: theme.card,
+
+              padding: "60px",
+
+              borderRadius: "20px",
+
+              border: `1px solid ${theme.border}`,
+
               textAlign: "center",
-              marginBottom: 24,
-              padding: 38,
+
+              marginBottom: "24px",
             }}
           >
-            <h3>No category budgets found</h3>
-            <p style={{ color: theme.secondary }}>
-              Add a category budget to start tracking your spending.
+            <p style={{ fontSize: "40px", margin: "0 0 12px 0" }}>💰</p>
+
+            <h3
+              style={{
+                margin: "0 0 8px 0",
+
+                fontWeight: "700",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              No budgets set yet
+            </h3>
+
+            <p
+              style={{
+                color: theme.secondary,
+
+                margin: "0 0 20px 0",
+
+                fontSize: "14px",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              Click "Add Budget" to create your first budget category
             </p>
-            <button style={buttonStyle} onClick={openAddForm}>
-              <Plus size={16} /> Create Budget
+
+            <button
+              onClick={openAdd}
+              className="hover-glow"
+              style={{
+                backgroundColor: theme.primary,
+
+                color: "white",
+
+                border: "none",
+
+                padding: "12px 24px",
+
+                borderRadius: "12px",
+
+                fontWeight: "bold",
+
+                cursor: "pointer",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              + Add Your First Budget
             </button>
-          </section>
+          </div>
         ) : (
-          <section
+          <div
+            className="stagger-children"
             style={{
               display: "grid",
+
               gridTemplateColumns:
                 "repeat(auto-fit, minmax(min(100%, 280px), 1fr))",
-              gap: 18,
-              marginBottom: 24,
+              width: "100%",
+              minWidth: 0,
+
+              gap: "20px",
+
+              marginBottom: "28px",
             }}
           >
-            {budgets.map((budget) => {
-              const spent = spendingByCategory[budget.category] || 0;
-              const limit = Number(budget.limit) || 0;
-              const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
-              const exceeded = spent > limit;
+            {budgets.map((b) => {
+              const pct = Math.round(((b.spent || 0) / (b.limit || 1)) * 100);
+
+              const exceeded = pct > 100;
+
+              const warning = pct > 80 && !exceeded;
 
               return (
-                <article
-                  key={budget._id}
+                <div
+                  key={b._id}
+                  className="hover-lift"
                   style={{
-                    ...cardStyle,
-                    borderColor: exceeded ? "#F43F5E80" : theme.border,
+                    backgroundColor: theme.card,
+
+                    padding: "24px",
+
+                    borderRadius: "16px",
+
+                    border: `1px solid ${exceeded ? "#F43F5E60" : warning ? "#F59E0B40" : theme.border}`,
                   }}
                 >
                   <div
                     style={{
                       display: "flex",
+
                       justifyContent: "space-between",
-                      alignItems: "center",
-                      gap: 12,
+
+                      alignItems: "flex-start",
+
+                      marginBottom: "16px",
                     }}
                   >
-                    <h3 style={{ margin: 0 }}>
-                      <span
+                    <div>
+                      <div
                         style={{
-                          display: "inline-block",
-                          width: 9,
-                          height: 9,
-                          borderRadius: "50%",
-                          background: COLORS[budget.category] || "#94A3B8",
-                          marginRight: 9,
-                        }}
-                      />
-                      {budget.category}
-                    </h3>
+                          display: "flex",
 
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        aria-label={`Edit ${budget.category} budget`}
-                        onClick={() => openEditForm(budget)}
-                        style={{
-                          border: 0,
-                          borderRadius: 7,
-                          padding: 8,
-                          background: `${theme.primary}18`,
-                          color: theme.primary,
-                          cursor: "pointer",
+                          alignItems: "center",
+
+                          gap: "8px",
+
+                          marginBottom: "4px",
                         }}
                       >
-                        <Edit2 size={15} />
+                        <div
+                          style={{
+                            width: "10px",
+
+                            height: "10px",
+
+                            borderRadius: "50%",
+
+                            background: CATEGORY_COLORS[b.category],
+                          }}
+                        />
+
+                        <h3
+                          style={{
+                            margin: 0,
+
+                            fontSize: "16px",
+
+                            fontWeight: "700",
+
+                            fontFamily: "'Inter', sans-serif",
+                          }}
+                        >
+                          {b.category}
+                        </h3>
+
+                        {exceeded && (
+                          <span
+                            style={{
+                              background: "#F43F5E20",
+
+                              color: "#F43F5E",
+
+                              fontSize: "11px",
+
+                              padding: "2px 8px",
+
+                              borderRadius: "20px",
+
+                              fontWeight: "700",
+
+                              fontFamily: "'Inter', sans-serif",
+                            }}
+                          >
+                            Exceeded!
+                          </span>
+                        )}
+
+                        {warning && (
+                          <span
+                            style={{
+                              background: "#F59E0B20",
+
+                              color: "#F59E0B",
+
+                              fontSize: "11px",
+
+                              padding: "2px 8px",
+
+                              borderRadius: "20px",
+
+                              fontWeight: "700",
+
+                              fontFamily: "'Inter', sans-serif",
+                            }}
+                          >
+                            Warning
+                          </span>
+                        )}
+                      </div>
+
+                      <p
+                        style={{
+                          margin: 0,
+
+                          color: theme.secondary,
+
+                          fontSize: "13px",
+
+                          fontFamily: "'Inter', sans-serif",
+                        }}
+                      >
+                        ₹{(b.spent || 0).toLocaleString()} of ₹
+                        {(b.limit || 0).toLocaleString()} spent
+                      </p>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        onClick={() => openEdit(b)}
+                        className="hover-scale"
+                        style={{
+                          background: `${theme.primary}20`,
+
+                          border: "none",
+
+                          color: theme.primary,
+
+                          width: "32px",
+
+                          height: "32px",
+
+                          borderRadius: "8px",
+
+                          cursor: "pointer",
+
+                          display: "flex",
+
+                          alignItems: "center",
+
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Edit2 size={14} />
                       </button>
 
                       <button
-                        aria-label={`Delete ${budget.category} budget`}
-                        onClick={() => deleteBudget(budget._id)}
+                        onClick={() => handleDelete(b._id)}
+                        className="hover-scale"
                         style={{
-                          border: 0,
-                          borderRadius: 7,
-                          padding: 8,
-                          background: "#F43F5E18",
+                          background: "#F43F5E20",
+
+                          border: "none",
+
                           color: "#F43F5E",
+
+                          width: "32px",
+
+                          height: "32px",
+
+                          borderRadius: "8px",
+
                           cursor: "pointer",
+
+                          display: "flex",
+
+                          alignItems: "center",
+
+                          justifyContent: "center",
                         }}
                       >
-                        <Trash2 size={15} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </div>
 
-                  <p style={{ color: theme.secondary, fontSize: 13 }}>
-                    {money(spent)} of {money(limit)} spent
-                  </p>
-
                   <div
                     style={{
-                      height: 8,
+                      height: "8px",
+
                       background: theme.border,
-                      borderRadius: 8,
-                      overflow: "hidden",
+
+                      borderRadius: "10px",
                     }}
                   >
                     <div
                       style={{
-                        height: "100%",
                         width: `${Math.min(pct, 100)}%`,
+
+                        height: "100%",
+
                         background: exceeded
                           ? "#F43F5E"
-                          : COLORS[budget.category] || theme.primary,
+                          : warning
+                            ? "#F59E0B"
+                            : CATEGORY_COLORS[b.category],
+
+                        borderRadius: "10px",
+
+                        transition: "width 0.8s ease",
                       }}
                     />
                   </div>
 
                   <p
                     style={{
-                      fontSize: 12,
+                      margin: "8px 0 0 0",
+
+                      fontSize: "12px",
+
                       color: exceeded ? "#F43F5E" : theme.secondary,
-                      marginBottom: 0,
+
+                      fontWeight: exceeded ? "700" : "400",
+
+                      fontFamily: "'Inter', sans-serif",
                     }}
                   >
-                    {pct}% used —{" "}
+                    {pct}% used
                     {exceeded
-                      ? `${money(spent - limit)} over budget`
-                      : `${money(limit - spent)} remaining`}
+                      ? ` — ₹${((b.spent || 0) - (b.limit || 0)).toLocaleString()} over budget`
+                      : ` — ₹${((b.limit || 0) - (b.spent || 0)).toLocaleString()} remaining`}
                   </p>
-                </article>
+                </div>
               );
             })}
-          </section>
+          </div>
         )}
 
-        <section style={cardStyle}>
-          <h3 style={{ marginTop: 0 }}>Budget Overview by Category</h3>
+        {/* History Chart */}
 
-          {totalSpent === 0 ? (
-            <p style={{ color: theme.secondary, padding: "25px 0" }}>
-              No expenses recorded this month. Your chart will update when you
-              add an expense dated in the current month.
-            </p>
-          ) : (
-            <div style={{ width: "100%", height: 300 }}>
+        {budgets.length > 0 && (
+          <div
+            className="animate-fadeInUp"
+            style={{
+              backgroundColor: theme.card,
+
+              padding: "28px",
+
+              borderRadius: "20px",
+
+              border: `1px solid ${theme.border}`,
+            }}
+          >
+            <h3
+              style={{
+                margin: "0 0 24px 0",
+
+                fontWeight: "700",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              Budget Overview by Category
+            </h3>
+
+            <div style={{ height: "260px" }}>
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
+                <BarChart data={historyData}>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke={theme.border}
                     vertical={false}
                   />
-                  <XAxis dataKey="category" stroke={theme.secondary} />
+
+                  <XAxis
+                    dataKey="month"
+                    stroke={theme.secondary}
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
                   <YAxis
                     stroke={theme.secondary}
-                    tickFormatter={(value) => money(value)}
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(v) => `₹${v / 1000}k`}
                   />
+
                   <Tooltip
-                    formatter={(value) => money(value)}
                     contentStyle={{
-                      background: theme.card,
+                      backgroundColor: theme.card,
+
                       border: `1px solid ${theme.border}`,
-                      borderRadius: 10,
-                      color: theme.text,
+
+                      borderRadius: "10px",
+
+                      fontFamily: "'Inter', sans-serif",
                     }}
+                    formatter={(v) => [`₹${v}`, ""]}
                   />
-                  <Bar
-                    dataKey="spent"
-                    name="Spent this month"
-                    radius={[4, 4, 0, 0]}
-                    fill={theme.primary}
-                  />
+
+                  <Legend />
+
+                  {budgets.map((b) => (
+                    <Bar
+                      key={b.category}
+                      dataKey={b.category}
+                      fill={CATEGORY_COLORS[b.category]}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  ))}
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          )}
-        </section>
+          </div>
+        )}
       </main>
 
-      {showBudgetForm && (
+      {/* Add/Edit Budget Modal */}
+
+      {showModal && (
         <div
-          onClick={() => setShowBudgetForm(false)}
           style={{
             position: "fixed",
+
             inset: 0,
+
+            background: "rgba(0, 0, 0, 0.6)",
+
+            backdropFilter: "blur(4px)",
+
+            display: "flex",
+
+            alignItems: "center",
+
+            justifyContent: "center",
+
+            padding: 12,
+
+            boxSizing: "border-box",
+
+            overflowY: "auto",
+
             zIndex: 1000,
-            background: "#0009",
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
           }}
+          onClick={() => setShowModal(false)}
         >
-          <form
-            onSubmit={saveBudget}
-            onClick={(event) => event.stopPropagation()}
+          <div
+            className="animate-scaleIn"
             style={{
-              ...cardStyle,
-              width: 420,
+              background: theme.card,
+
+              borderRadius: "24px",
+
+              padding: "clamp(18px, 5vw, 32px)",
+
+              width: "min(420px, calc(100vw - 24px))",
+
               maxWidth: "100%",
+              maxHeight: "calc(100dvh - 24px)",
+              overflowY: "auto",
               boxSizing: "border-box",
+              minWidth: 0,
+
+              border: `1px solid ${theme.border}`,
+
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
+
                 justifyContent: "space-between",
+
+                alignItems: "center",
+
+                marginBottom: "24px",
               }}
             >
-              <h2>{editing ? "Edit Budget" : "Add Budget"}</h2>
-              <button
-                type="button"
-                onClick={() => setShowBudgetForm(false)}
+              <h3
                 style={{
-                  border: 0,
-                  background: "transparent",
-                  color: theme.text,
-                  cursor: "pointer",
+                  margin: 0,
+
+                  fontWeight: "800",
+
+                  fontSize: "20px",
+
+                  fontFamily: "'Inter', sans-serif",
                 }}
               >
-                <X />
+                {editItem ? "Edit Budget" : "Add Budget"}
+              </h3>
+
+              <button
+                onClick={() => setShowModal(false)}
+                className="hover-scale"
+                style={{
+                  background: "none",
+
+                  border: "none",
+
+                  color: theme.secondary,
+
+                  cursor: "pointer",
+
+                  padding: "4px",
+                }}
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <label>
-              Category
-              <select
-                style={inputStyle}
-                value={form.category}
-                disabled={Boolean(editing)}
-                onChange={(event) =>
-                  setForm({ ...form, category: event.target.value })
-                }
+            <div style={{ marginBottom: "20px" }}>
+              <label
+                style={{
+                  fontSize: "13px",
+
+                  fontWeight: "700",
+
+                  marginBottom: "8px",
+
+                  display: "block",
+
+                  color: theme.secondary,
+
+                  fontFamily: "'Inter', sans-serif",
+                }}
               >
-                {CATEGORIES.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
+                Category
+              </label>
+
+              <select
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                className="hover-lift"
+                style={inputStyle}
+              >
+                {[
+                  "Food",
+
+                  "Transport",
+
+                  "Bills",
+
+                  "Entertainment",
+
+                  "Health",
+
+                  "Shopping",
+
+                  "Other",
+                ].map((c) => (
+                  <option key={c}>{c}</option>
                 ))}
               </select>
-            </label>
+            </div>
 
-            <label style={{ display: "block", marginTop: 16 }}>
-              Budget limit (₹)
+            <div style={{ marginBottom: "20px" }}>
+              <label
+                style={{
+                  fontSize: "13px",
+
+                  fontWeight: "700",
+
+                  marginBottom: "8px",
+
+                  display: "block",
+
+                  color: theme.secondary,
+
+                  fontFamily: "'Inter', sans-serif",
+                }}
+              >
+                Budget Limit (₹)
+              </label>
+
               <input
-                style={inputStyle}
                 type="number"
-                min="1"
-                step="0.01"
-                required
+                placeholder="e.g. 5000"
                 value={form.limit}
-                onChange={(event) =>
-                  setForm({ ...form, limit: event.target.value })
-                }
-                placeholder="Enter budget limit"
+                onChange={(e) => setForm({ ...form, limit: e.target.value })}
+                className="hover-lift"
+                style={inputStyle}
               />
-            </label>
-
-            {error && (
-              <p role="alert" style={{ color: "#F43F5E", fontSize: 13 }}>
-                {error}
-              </p>
-            )}
+            </div>
 
             <button
-              type="submit"
-              disabled={saving}
-              style={{ ...buttonStyle, width: "100%", marginTop: 20 }}
+              onClick={handleSave}
+              className="hover-glow"
+              style={{
+                width: "100%",
+
+                background: theme.primary,
+
+                color: "white",
+
+                border: "none",
+
+                padding: "14px",
+
+                borderRadius: "12px",
+
+                fontWeight: "bold",
+
+                fontSize: "15px",
+
+                cursor: "pointer",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
             >
-              {saving ? "Saving..." : editing ? "Save Changes" : "Add Budget"}
+              {editItem ? "Save Changes" : "Add Budget"}
             </button>
-          </form>
+          </div>
         </div>
       )}
 
-      {showLimitForm && (
+      {/* Change Monthly Limit Modal */}
+
+      {showLimitModal && (
         <div
-          onClick={() => setShowLimitForm(false)}
           style={{
             position: "fixed",
+
             inset: 0,
+
+            background: "rgba(0, 0, 0, 0.6)",
+
+            backdropFilter: "blur(4px)",
+
+            display: "flex",
+
+            alignItems: "center",
+
+            justifyContent: "center",
+
+            padding: 12,
+
+            boxSizing: "border-box",
+
+            overflowY: "auto",
+
             zIndex: 1000,
-            background: "#0009",
-            display: "grid",
-            placeItems: "center",
-            padding: 16,
           }}
+          onClick={() => setShowLimitModal(false)}
         >
-          <form
-            onSubmit={saveMonthlyLimit}
-            onClick={(event) => event.stopPropagation()}
+          <div
+            className="animate-scaleIn"
             style={{
-              ...cardStyle,
-              width: 420,
+              background: theme.card,
+
+              borderRadius: "24px",
+
+              padding: "clamp(18px, 5vw, 32px)",
+
+              width: "min(380px, calc(100vw - 24px))",
+
               maxWidth: "100%",
+              maxHeight: "calc(100dvh - 24px)",
+              overflowY: "auto",
               boxSizing: "border-box",
+              minWidth: 0,
+
+              border: `1px solid ${theme.border}`,
+
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
+
                 justifyContent: "space-between",
+
+                alignItems: "center",
+
+                marginBottom: "24px",
               }}
             >
-              <h2>Change Monthly Limit</h2>
-              <button
-                type="button"
-                onClick={() => setShowLimitForm(false)}
+              <h3
                 style={{
-                  border: 0,
-                  background: "transparent",
-                  color: theme.text,
-                  cursor: "pointer",
+                  margin: 0,
+
+                  fontWeight: "800",
+
+                  fontSize: "20px",
+
+                  fontFamily: "'Inter', sans-serif",
                 }}
               >
-                <X />
+                Change Monthly Budget Limit
+              </h3>
+
+              <button
+                onClick={() => setShowLimitModal(false)}
+                className="hover-scale"
+                style={{
+                  background: "none",
+
+                  border: "none",
+
+                  color: theme.secondary,
+
+                  cursor: "pointer",
+
+                  padding: "4px",
+                }}
+              >
+                <X size={20} />
               </button>
             </div>
 
-            <label>
-              Monthly budget (₹)
-              <input
-                style={inputStyle}
-                type="number"
-                min="1"
-                step="0.01"
-                required
-                value={limitInput}
-                onChange={(event) => setLimitInput(event.target.value)}
-              />
+            <p
+              style={{
+                color: theme.secondary,
+
+                fontSize: "13px",
+
+                margin: "0 0 20px 0",
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              Current limit: ₹{(monthlyLimit || 0).toLocaleString("en-IN")}
+            </p>
+
+            <label
+              style={{
+                fontSize: "13px",
+
+                fontWeight: "700",
+
+                marginBottom: "8px",
+
+                display: "block",
+
+                color: theme.secondary,
+
+                fontFamily: "'Inter', sans-serif",
+              }}
+            >
+              New Monthly Limit (₹)
             </label>
 
-            {error && (
-              <p role="alert" style={{ color: "#F43F5E", fontSize: 13 }}>
-                {error}
-              </p>
-            )}
+            <input
+              type="number"
+              placeholder="e.g. 30000"
+              value={newLimit}
+              onChange={(e) => setNewLimit(e.target.value)}
+              className="hover-lift"
+              style={{
+                width: "100%",
+
+                padding: "12px 16px",
+
+                background: theme.bg,
+
+                border: `1px solid ${theme.border}`,
+
+                borderRadius: "12px",
+
+                color: theme.text,
+
+                fontSize: "14px",
+
+                outline: "none",
+
+                boxSizing: "border-box",
+
+                fontFamily: "'Inter', sans-serif",
+
+                marginTop: "8px",
+              }}
+            />
 
             <button
-              type="submit"
-              disabled={saving}
-              style={{ ...buttonStyle, width: "100%", marginTop: 20 }}
+              onClick={handleSaveLimit}
+              disabled={savingLimit}
+              className="hover-glow"
+              style={{
+                width: "100%",
+
+                background: theme.primary,
+
+                color: "white",
+
+                border: "none",
+
+                padding: "14px",
+
+                borderRadius: "12px",
+
+                fontWeight: "bold",
+
+                fontSize: "15px",
+
+                cursor: savingLimit ? "not-allowed" : "pointer",
+
+                marginTop: "24px",
+
+                opacity: savingLimit ? 0.7 : 1,
+
+                fontFamily: "'Inter', sans-serif",
+              }}
             >
-              {saving ? "Saving..." : "Save Monthly Limit"}
+              {savingLimit ? "Saving..." : "Save New Limit"}
             </button>
-          </form>
+          </div>
         </div>
       )}
     </div>
   );
-}
+};
+
+export default Budget;
