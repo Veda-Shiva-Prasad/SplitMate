@@ -22,18 +22,14 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
-          cache-dependency-path: |
-            server/package-lock.json
-            client/package-lock.json
 
-      - name: Install Server Dependencies & Test
+      - name: Install Server Dependencies
         run: |
           cd server
-          npm ci
+          npm install
 
       - name: Install Client Dependencies & Build
         run: |
           cd client
-          npm ci
+          npm install
           npm run build
