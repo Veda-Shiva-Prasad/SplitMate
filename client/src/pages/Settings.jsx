@@ -740,7 +740,38 @@ const Settings = ({ isDarkMode, setIsDarkMode }) => {
 
         delete normalizedTransaction.updatedAt;
 
-        await API.post("/transactions", normalizedTransaction);
+        // Skip rows the API would reject (zero or invalid amounts).
+        if (!(normalizedTransaction.amount > 0)) {
+          continue;
+        }
+
+        // The API stores expenses as { description, amount, category, date, icon }.
+        // Exported JSON has a display date like "7 Nov" (unsafe to parse) and an
+        // ISO "rawDate", so prefer rawDate and only accept full YYYY-MM-DD dates.
+        const rawDateValue = normalizedTransaction.rawDate;
+        const dateValue = normalizedTransaction.date;
+        const isoDate = [rawDateValue, dateValue].find(
+          (value) =>
+            typeof value === "string" &&
+            /^\d{4}-\d{2}-\d{2}/.test(value) &&
+            !Number.isNaN(new Date(value).getTime()),
+        );
+
+        const expensePayload = {
+          description: String(normalizedTransaction.name).slice(0, 200),
+          amount: normalizedTransaction.amount,
+          category: normalizedTransaction.category,
+        };
+
+        if (isoDate) {
+          expensePayload.date = new Date(isoDate).toISOString();
+        }
+
+        if (typeof normalizedTransaction.icon === "string") {
+          expensePayload.icon = normalizedTransaction.icon;
+        }
+
+        await API.post("/expenses", expensePayload);
 
         importedCount += 1;
       }
@@ -773,7 +804,7 @@ const Settings = ({ isDarkMode, setIsDarkMode }) => {
     try {
       setBusy(true);
 
-      await API.delete("/transactions");
+      await API.delete("/expenses");
 
       await refreshData();
 

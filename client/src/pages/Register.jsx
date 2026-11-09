@@ -108,7 +108,8 @@ const Register = () => {
         localStorage.setItem("userPhoto", user.profilePhoto);
       }
 
-      navigate("/", { replace: true });
+      // navigate("/", { replace: true });
+      navigate("/dashboard", { replace: true });
 
       Promise.resolve()
         .then(() => refreshData())
@@ -118,8 +119,8 @@ const Register = () => {
     } catch (requestError) {
       setError(
         requestError.response?.data?.message ||
-          requestError.message ||
-          "Unable to create your account. Please try again.",
+        requestError.message ||
+        "Unable to create your account. Please try again.",
       );
     } finally {
       setBusy(false);

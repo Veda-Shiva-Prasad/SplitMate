@@ -1,105 +1,162 @@
 const Goal = require("../models/Goal");
+const {
+  isValidId,
+  cleanString,
+  isPositiveNumber,
+  isNonNegativeNumber,
+  isValidDate,
+} = require("../utils/validate");
 
-// @desc    Get all goals for user
-// @route   GET /api/goals
+const PRIORITIES = ["High", "Medium", "Low"];
+
+const serverError = (res, label, error) => {
+  console.error(`${label} error:`, error);
+  return res.status(500).json({ message: "Something went wrong. Please try again." });
+};
+
+// GET /api/goals
 exports.getGoals = async (req, res) => {
   try {
-    const goals = await Goal.find({ userId: req.user.id }).sort({
+    const goals = await Goal.find({ userId: req.user._id }).sort({
       createdAt: -1,
     });
-    res.status(200).json(goals);
+    return res.status(200).json(goals);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return serverError(res, "Get goals", error);
   }
 };
 
-// @desc    Create a goal
-// @route   POST /api/goals
+// POST /api/goals
 exports.createGoal = async (req, res) => {
   try {
-    const { name, target, saved, deadline, priority, icon } = req.body;
+    const { name, target, saved, deadline, priority, icon } = req.body || {};
+
+    const cleanName = cleanString(name, 100);
+
+    if (!cleanName) {
+      return res.status(400).json({ message: "Enter a goal name (up to 100 characters)." });
+    }
+
+    if (!isPositiveNumber(target)) {
+      return res.status(400).json({ message: "Target must be a positive number." });
+    }
+
+    if (saved !== undefined && !isNonNegativeNumber(saved)) {
+      return res.status(400).json({ message: "Saved amount cannot be negative." });
+    }
+
+    if (!isValidDate(deadline)) {
+      return res.status(400).json({ message: "Select a valid deadline." });
+    }
+
+    if (priority !== undefined && !PRIORITIES.includes(priority)) {
+      return res.status(400).json({ message: "Select a valid priority." });
+    }
+
     const goal = await Goal.create({
-      userId: req.user.id,
-      name,
+      userId: req.user._id,
+      name: cleanName,
       target,
-      saved: saved || 0,
-      deadline,
-      priority,
-      icon,
+      saved: Math.min(saved || 0, target),
+      deadline: new Date(deadline),
+      priority: priority || "Medium",
+      icon: cleanString(icon, 12) || undefined,
     });
-    res.status(201).json(goal);
+
+    return res.status(201).json(goal);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return serverError(res, "Create goal", error);
   }
 };
 
-// @desc    Update goal
-// @route   PUT /api/goals/:id
+// PUT /api/goals/:id
 exports.updateGoal = async (req, res) => {
   try {
-    const { saved, archived } = req.body;
-    const goal = await Goal.findById(req.params.id);
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid goal ID." });
+    }
+
+    const { saved, archived } = req.body || {};
+
+    const goal = await Goal.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
 
     if (!goal) {
-      return res.status(404).json({ message: "Goal not found" });
+      return res.status(404).json({ message: "Goal not found." });
     }
 
-    if (goal.userId.toString() !== req.user.id) {
-      return res.status(401).json({ message: "Not authorized" });
+    if (saved !== undefined) {
+      if (!isNonNegativeNumber(saved)) {
+        return res.status(400).json({ message: "Saved amount cannot be negative." });
+      }
+      goal.saved = Math.min(saved, goal.target);
     }
 
-    if (saved !== undefined) goal.saved = saved;
-    if (archived !== undefined) goal.archived = archived;
+    if (archived !== undefined) {
+      if (typeof archived !== "boolean") {
+        return res.status(400).json({ message: "Archived must be true or false." });
+      }
+      goal.archived = archived;
+    }
 
     await goal.save();
-    res.status(200).json(goal);
+    return res.status(200).json(goal);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return serverError(res, "Update goal", error);
   }
 };
 
-// @desc    Delete goal
-// @route   DELETE /api/goals/:id
+// DELETE /api/goals/:id
 exports.deleteGoal = async (req, res) => {
   try {
-    const goal = await Goal.findById(req.params.id);
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid goal ID." });
+    }
+
+    const goal = await Goal.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
 
     if (!goal) {
-      return res.status(404).json({ message: "Goal not found" });
+      return res.status(404).json({ message: "Goal not found." });
     }
 
-    if (goal.userId.toString() !== req.user.id) {
-      return res.status(401).json({ message: "Not authorized" });
-    }
-
-    await goal.deleteOne();
-    res.status(200).json({ message: "Goal deleted" });
+    return res.status(200).json({ message: "Goal deleted." });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return serverError(res, "Delete goal", error);
   }
 };
 
-// @desc    Add money to goal
-// @route   POST /api/goals/:id/add
+// POST /api/goals/:id/add
 exports.addToGoal = async (req, res) => {
   try {
-    const { amount } = req.body;
-    const goal = await Goal.findById(req.params.id);
+    if (!isValidId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid goal ID." });
+    }
+
+    const { amount } = req.body || {};
+
+    if (!isPositiveNumber(amount)) {
+      return res.status(400).json({ message: "Amount must be a positive number." });
+    }
+
+    const goal = await Goal.findOne({
+      _id: req.params.id,
+      userId: req.user._id,
+    });
 
     if (!goal) {
-      return res.status(404).json({ message: "Goal not found" });
+      return res.status(404).json({ message: "Goal not found." });
     }
 
-    if (goal.userId.toString() !== req.user.id) {
-      return res.status(401).json({ message: "Not authorized" });
-    }
-
-    const newSaved = Math.min(goal.saved + amount, goal.target);
-    goal.saved = newSaved;
+    goal.saved = Math.min(goal.saved + amount, goal.target);
     await goal.save();
 
-    res.status(200).json(goal);
+    return res.status(200).json(goal);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return serverError(res, "Add to goal", error);
   }
 };

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Plus,
   TrendingUp,
-  TrendingDown,
   Trash2,
   Users,
   X,

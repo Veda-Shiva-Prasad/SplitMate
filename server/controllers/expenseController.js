@@ -172,3 +172,25 @@ exports.getSummary = async (req, res) => {
     });
   }
 };
+
+// @desc Delete ALL personal expenses of the logged-in user
+// @route DELETE /api/expenses
+exports.deleteAllExpenses = async (req, res) => {
+  try {
+    const result = await Expense.deleteMany({
+      paidBy: req.user._id,
+      type: "expense",
+    });
+
+    return res.status(200).json({
+      message: "All expenses deleted successfully.",
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error("Delete all expenses error:", error.message);
+
+    return res.status(500).json({
+      message: "Could not delete the expenses.",
+    });
+  }
+};

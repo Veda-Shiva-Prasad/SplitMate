@@ -96,15 +96,6 @@ const Recurring = ({ isDarkMode, setIsDarkMode }) => {
     }
   };
 
-  const categoryIcons = {
-    Bills: "⚡",
-    Subscriptions: "📺",
-    Rent: "🏠",
-    Insurance: "🛡️",
-    Loans: "💰",
-    Other: "📦",
-  };
-
   const theme = {
     bg: isDarkMode ? "#0A0F1E" : "#F1F5F9",
     card: isDarkMode ? "#111827" : "#FFFFFF",

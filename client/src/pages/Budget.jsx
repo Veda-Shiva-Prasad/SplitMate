@@ -48,7 +48,7 @@ const Budget = ({ isDarkMode, setIsDarkMode }) => {
 
   const [newLimit, setNewLimit] = useState("");
 
-  const [carryOver, setCarryOver] = useState(false);
+  const [carryOver] = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -220,12 +220,12 @@ const Budget = ({ isDarkMode, setIsDarkMode }) => {
   const historyData =
     budgets.length > 0
       ? [
-          {
-            month: "This Month",
+        {
+          month: "This Month",
 
-            ...Object.fromEntries(budgets.map((b) => [b.category, b.spent])),
-          },
-        ]
+          ...Object.fromEntries(budgets.map((b) => [b.category, b.spent])),
+        },
+      ]
       : [{ month: "No Data", amount: 0 }];
 
   if (loading) {

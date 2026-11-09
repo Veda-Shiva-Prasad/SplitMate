@@ -52,16 +52,22 @@ const Insights = ({ isDarkMode, setIsDarkMode }) => {
   const goalProgress =
     activeGoals.length > 0 ? (completedGoals / activeGoals.length) * 100 : 0;
 
-  const currentMonth = new Date().getMonth();
+  const now = new Date();
+  const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const isInMonth = (tx, year, month) => {
+    if (!tx.rawDate) return false;
+    const date = new Date(tx.rawDate);
+    return date.getFullYear() === year && date.getMonth() === month;
+  };
+
   const currentMonthSpent = (transactions || [])
-    .filter(
-      (tx) => tx.rawDate && new Date(tx.rawDate).getMonth() === currentMonth,
-    )
+    .filter((tx) => isInMonth(tx, now.getFullYear(), now.getMonth()))
     .reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0);
+
   const lastMonthSpent = (transactions || [])
-    .filter(
-      (tx) =>
-        tx.rawDate && new Date(tx.rawDate).getMonth() === currentMonth - 1,
+    .filter((tx) =>
+      isInMonth(tx, lastMonthDate.getFullYear(), lastMonthDate.getMonth()),
     )
     .reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0);
   const spendingChange =

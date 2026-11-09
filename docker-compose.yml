@@ -1,31 +1,42 @@
-version: "3.8"
-
+# Run the whole stack locally:  docker compose up --build
+#   App:  http://localhost:8080
+#   API:  http://localhost:5000/health
 services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
   server:
     build: ./server
-    container_name: splitmate-server
-    restart: always
+    restart: unless-stopped
+    environment:
+      PORT: "5000"
+      MONGO_URI: mongodb://mongo:27017/splitmate
+      JWT_SECRET: ${JWT_SECRET:?Create a .env file next to docker-compose.yml with JWT_SECRET (32+ characters)}
+      CLIENT_URL: http://localhost:8080
     ports:
       - "5000:5000"
-    environment:
-      - PORT=5000
-      - MONGO_URI=${MONGO_URI}
-      - JWT_SECRET=${JWT_SECRET}
-      - NODE_ENV=production
-    networks:
-      - splitmate-net
+    depends_on:
+      mongo:
+        condition: service_healthy
 
   client:
-    build: ./client
-    container_name: splitmate-client
-    restart: always
+    build:
+      context: ./client
+      args:
+        REACT_APP_API_URL: http://localhost:5000/api
+    restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       - server
-    networks:
-      - splitmate-net
 
-networks:
-  splitmate-net:
-    driver: bridge
+volumes:
+  mongo-data:

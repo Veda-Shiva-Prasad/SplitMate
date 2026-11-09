@@ -1,369 +1,148 @@
-<div align="center">
-
-<img src="https://img.shields.io/badge/SplitMate-Finance%20Manager-4f46e5?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyek0xMSAxN3YtNkg5bDMtNCAzIDRoLTJ2NmgtMnoiLz48L3N2Zz4=" />
-
 # 💰 SplitMate
 
-### AI-Powered Personal Finance Manager
+A full-stack personal finance manager built with the MERN stack. Track expenses, plan budgets, save toward goals, manage recurring payments and keep a list of money others owe you.
 
-_Track smarter. Save better. Live freely._
+[![CI](https://github.com/Veda-Shiva-Prasad/SplitMate/actions/workflows/ci.yml/badge.svg)](https://github.com/Veda-Shiva-Prasad/SplitMate/actions/workflows/ci.yml)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js-Express_5-339933?logo=node.js&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-[![React](https://img.shields.io/badge/React-19.0-61DAFB?style=flat-square&logo=react)](https://reactjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat-square&logo=mongodb)](https://mongodb.com/)
-[![JWT](https://img.shields.io/badge/Auth-JWT-000000?style=flat-square&logo=jsonwebtokens)](https://jwt.io/)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+**Live app:** https://split-mate-chi.vercel.app (frontend on Vercel, API on Render)
 
-</div>
+> The API runs on a free Render plan, so the first request after a quiet period can take 30+ seconds while the server wakes up.
 
----
+## Features
 
-## 🌟 What is SplitMate?
+- **Accounts:** register, log in, JWT authentication, edit profile and photo, change password
+- **Expenses:** add, list and delete expenses with categories; running totals
+- **Budgets:** an overall monthly limit plus per-category monthly budgets with progress
+- **Savings goals:** target, deadline and priority; add money; archive completed goals
+- **Recurring payments:** weekly, monthly, quarterly or yearly bills with next-due dates
+- **Money owed to you:** record who owes you what and mark entries settled
+- **Custom categories:** your own categories with colour, icon and optional limit
+- **Reports and activity:** charts built from your transactions, activity feed, notifications
+- **Insights:** rule-based spending insights (top category, month-over-month change, budget health). These are calculated in the browser; there is no machine-learning or LLM component.
+- **Data tools:** export and import transactions (JSON or CSV), clear all transactions
+- **Dark and light theme**, responsive layout
 
-**SplitMate** is a full-stack personal finance management web application built on the **MERN stack**. It gives you complete control over your financial life — from tracking daily expenses and setting savings goals, to getting AI-powered spending insights and generating downloadable financial reports.
+## Tech stack
 
-Whether you're managing solo finances or splitting bills with friends, SplitMate makes money management effortless and visual.
+| Layer    | Technology                                                            |
+| -------- | --------------------------------------------------------------------- |
+| Frontend | React 19, React Router 7, Axios, Recharts, Create React App           |
+| Backend  | Node.js, Express 5, Mongoose 8, JWT (jsonwebtoken), bcryptjs          |
+| Security | helmet, CORS allow-list, rate limiting on login and registration      |
+| Database | MongoDB (Atlas in production, a container locally)                    |
+| Quality  | Jest and Supertest (API), React Testing Library (UI), GitHub Actions  |
+| Delivery | Docker, Docker Compose, nginx; Vercel (frontend) and Render (API)     |
 
----
-
-## ✨ Features at a Glance
-
-| Feature                        | Description                                                             |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| 📊 **AI Financial Dashboard**  | Real-time spending overview with interactive charts and smart insights  |
-| 💰 **Expense Tracking**        | Log expenses by category with icons, dates, and full delete support     |
-| 📋 **Budget Planner**          | Set per-category budgets with visual progress bars and overspend alerts |
-| 🎯 **Savings Goals**           | Create goals, track progress, add money, celebrate completions          |
-| 🔄 **Recurring Payments**      | Manage subscriptions and bills with due date reminders                  |
-| 📈 **Financial Reports**       | Category breakdowns, trend charts, and CSV/JSON export                  |
-| 🤖 **AI Insights**             | Personalized spending tips and budget health scoring                    |
-| 🕐 **Activity Feed**           | Chronological log of all financial events with search and filters       |
-| ⚙️ **Settings**                | Profile management, photo upload, data import/export, notifications     |
-| 🌓 **Global Dark/Light Theme** | Persistent theme toggle across all pages                                |
-| 🔐 **Secure Auth**             | JWT-based authentication with bcrypt password hashing                   |
-| 👥 **Multi-User Support**      | Each user's data is completely isolated — zero data leakage             |
-
----
-
-## 🖼️ Screenshots
-
-> _Clean dark theme UI with a premium fintech aesthetic_
-
-### Dashboard
-
-The central hub — shows balance, spent, owed, budget health, AI smart insight, recent transactions, and upcoming payments — all starting at zero for every new user.
-
-### Budget Planner
-
-Create category budgets, track spending vs limits, and customize your overall monthly limit — all saved per user.
-
-### Savings Goals
-
-Visual goal cards with progress bars, priority badges, and a celebration animation when a goal is completed.
-
-### Reports & Analytics
-
-Live charts built from your real transactions — category breakdown pie chart, day-wise spending line chart, and top 5 expenses table.
-
-### AI Insights
-
-Personalized savings tips, budget health score gauge, and spending trend charts — all powered by your real data.
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-
-| Technology          | Version | Purpose                         |
-| ------------------- | ------- | ------------------------------- |
-| **React**           | 19      | UI Framework                    |
-| **React Router v6** | 6.x     | Client-side routing             |
-| **Recharts**        | Latest  | Charts and data visualization   |
-| **Lucide React**    | Latest  | Icon library                    |
-| **Axios**           | Latest  | HTTP client for API calls       |
-| **Plain CSS**       | —       | Styling (no Tailwind/Bootstrap) |
-
-### Backend
-
-| Technology         | Version | Purpose                         |
-| ------------------ | ------- | ------------------------------- |
-| **Node.js**        | 18+     | Runtime environment             |
-| **Express.js**     | 4.x     | REST API framework              |
-| **MongoDB Atlas**  | Cloud   | NoSQL database                  |
-| **Mongoose**       | Latest  | ODM for MongoDB                 |
-| **JSON Web Token** | Latest  | Stateless authentication        |
-| **bcryptjs**       | Latest  | Password hashing                |
-| **dotenv**         | Latest  | Environment variable management |
-
----
-
-## 📁 Project Structure
+## Project structure
 
 ```
 SplitMate/
-├── client/                          # React Frontend
-│   ├── public/
-│   └── src/
-│       ├── components/
-│       │   └── Navbar.jsx           # Global navbar with theme toggle
-│       ├── pages/
-│       │   ├── Dashboard.jsx        # AI financial dashboard
-│       │   ├── Budget.jsx           # Budget planner
-│       │   ├── Categories.jsx       # Category management
-│       │   ├── Recurring.jsx        # Recurring payments
-│       │   ├── Goals.jsx            # Savings goals
-│       │   ├── Insights.jsx         # AI insights
-│       │   ├── Reports.jsx          # Financial reports
-│       │   ├── Activity.jsx         # Activity feed
-│       │   ├── Settings.jsx         # User settings
-│       │   ├── Login.jsx            # Login page
-│       │   └── Register.jsx         # Registration page
-│       ├── App.js                   # Global theme state + routing
-│       ├── index.js                 # App entry point
-│       └── index.css                # Global styles and CSS variables
-│
-├── server/                          # Node.js Backend
-│   ├── config/
-│   │   └── db.js                    # MongoDB connection
-│   ├── models/
-│   │   ├── User.js                  # User schema
-│   │   ├── Expense.js               # Expense schema
-│   │   ├── Budget.js                # Budget schema
-│   │   ├── Goal.js                  # Goal schema
-│   │   ├── Recurring.js             # Recurring payments schema
-│   │   └── Category.js              # Custom categories schema
-│   ├── controllers/
-│   │   ├── authController.js        # Login / Register logic
-│   │   └── expenseController.js     # Expense CRUD operations
-│   ├── middleware/
-│   │   └── authMiddleware.js        # JWT token verification
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   └── expenseRoutes.js
-│   ├── .env                         # Environment variables (not committed)
-│   └── index.js                     # Server entry point
-│
-├── .gitignore
-└── README.md
+├── client/                 React app (Create React App)
+│   ├── src/pages/          Dashboard, Budget, Goals, Recurring, Reports, Settings ...
+│   ├── src/context/        DataContext - loads user data from the API
+│   ├── src/utils/api.js    Axios instance with auth header + 401 handling
+│   ├── Dockerfile          Build with Node, serve with nginx
+│   └── nginx.conf          Static hosting with SPA fallback
+├── server/                 Express API
+│   ├── app.js              Express app (middleware, routes) - imported by tests
+│   ├── index.js            Connects to MongoDB and starts the server
+│   ├── controllers/ models/ routes/ middleware/ utils/
+│   ├── tests/              Jest + Supertest API tests
+│   └── Dockerfile
+├── docker-compose.yml      MongoDB + API + client in one command
+└── .github/workflows/ci.yml
 ```
 
----
+## Run it locally
 
-## 🚀 Getting Started
+### Option A: Docker (one command)
 
-### Prerequisites
-
-- Node.js v14 or higher
-- npm or yarn
-- A free [MongoDB Atlas](https://www.mongodb.com/atlas) account
-
----
-
-### 1. Clone the Repository
+Requires Docker Desktop.
 
 ```bash
-git clone https://github.com/Veda-Shiva-Prasad/SplitMate.git
-cd SplitMate
+cp .env.example .env          # then put a real JWT_SECRET (32+ characters) inside
+docker compose up --build
 ```
 
-### 2. Backend Setup
+- App: http://localhost:8080
+- API health check: http://localhost:5000/health
+
+This starts MongoDB, the API and the nginx-served frontend. Stop it with `docker compose down` (add `-v` to delete the database volume).
+
+### Option B: Without Docker
+
+Requires Node.js 20 or newer and a MongoDB database (local or Atlas).
 
 ```bash
+# API
 cd server
+cp .env.example .env          # edit MONGO_URI and JWT_SECRET
 npm install
-```
+npm run dev                   # http://localhost:5000
 
-Create a `.env` file inside the `server/` folder:
-
-```env
-PORT=5000
-MONGO_URI=your_mongodb_atlas_connection_string
-JWT_SECRET=your_super_secret_key
-```
-
-Start the backend server:
-
-```bash
-npm run dev
-```
-
-> Server runs at `http://localhost:5000`
-
----
-
-### 3. Frontend Setup
-
-```bash
+# Frontend (new terminal)
 cd client
+cp .env.example .env          # REACT_APP_API_URL=http://localhost:5000/api
 npm install
-npm start
+npm start                     # http://localhost:3000
 ```
 
-> App opens at `http://localhost:3000`
+## Environment variables
 
----
+| Variable            | Where  | Purpose                                                           |
+| ------------------- | ------ | ----------------------------------------------------------------- |
+| `MONGO_URI`         | server | MongoDB connection string                                         |
+| `JWT_SECRET`        | server | Secret for signing tokens, at least 32 characters                 |
+| `CLIENT_URL`        | server | Allowed browser origin(s), comma separated                        |
+| `PORT`              | server | API port (default 5000)                                           |
+| `REACT_APP_API_URL` | client | API base URL, fixed into the build at build time                  |
 
-## 🔑 Core Functionality Deep Dive
+Real values live only in `.env` files (git-ignored) or in the hosting dashboards. Never commit them.
 
-### 🏠 Dashboard
-
-- Displays Total Balance, Total Spent, Monthly Budget, and "You Are Owed" — all starting at ₹0 for every new account
-- Spending Analysis chart automatically updates based on your real transactions (weekly and monthly view)
-- AI Smart Insight card dynamically adjusts its message based on your actual spending
-- Budget Health Score calculated in real time from your transactions
-- Full delete support on every transaction
-
-### 💰 Budget Planner
-
-- Set an **editable overall monthly limit** (click "Change Limit" button)
-- Category budgets stored per user — new accounts start with zero budgets
-- Warning badges at 80% usage, exceeded badges at 100%
-- Carry-over unused budget toggle
-
-### 🎯 Savings Goals
-
-- All goal data stored in localStorage per user key
-- Add Money feature with live progress bar updates
-- 🎉 Celebration banner animation on goal completion
-- Archive and delete support
-- Empty state screen for new users
-
-### 🔄 Recurring Payments
-
-- Stored per user — new accounts start empty
-- Mark as Paid toggle per subscription
-- Enable/Disable toggle
-- Urgent highlight for payments due within 3 days
-
-### 📈 Reports
-
-- All charts built from real transaction data — no fake placeholder data
-- CSV export downloads a real `.csv` file that opens in Excel
-- Empty state displayed for new users with no transactions
-
-### ⚙️ Settings
-
-- Profile photo upload with FileReader (stores as base64)
-- CSV export and import with real file download and parsing
-- JSON backup export
-- Clear all transactions with confirmation
-
-### 🌓 Theme
-
-- Global dark/light theme managed in `App.js` state
-- Persisted to `localStorage` under `splitmate_theme`
-- Passes down to every page via props — toggling once applies everywhere
-
-### 🔐 Authentication & Data Isolation
-
-- On login: only auth tokens are cleared, all `splitmate_*` data is preserved
-- Each user's expenses, budgets, goals, and recurring data are stored under their email as a unique key
-- Logging into a new account shows a completely clean slate
-
----
-
-## 📊 Database Schemas
-
-```javascript
-// User
-{ name: String, email: String (unique), password: String (hashed), createdAt: Date }
-
-// Expense
-{ userId: ObjectId, name: String, category: String, amount: Number, date: Date, icon: String, rawDate: String }
-
-// Budget
-{ userId: ObjectId, category: String, limit: Number, spent: Number, color: String }
-
-// Goal
-{ userId: ObjectId, name: String, target: Number, saved: Number, deadline: Date, priority: String, icon: String, archived: Boolean }
-
-// Recurring
-{ userId: ObjectId, name: String, amount: Number, frequency: String, category: String, nextDue: Date, icon: String, active: Boolean, paid: Boolean }
-```
-
----
-
-## 🎨 Design System
-
-```css
-/* Color Palette */
---bg-color: #0a0f1e /* Deep navy background */ --card-bg: #111827
-  /* Dark card surfaces */ --border-color: #1e2d45 /* Subtle borders */
-  --primary-accent: #3b82f6 /* Electric blue */ --positive: #10b981
-  /* Emerald green */ --negative: #f43f5e /* Rose red */ --warning: #f59e0b
-  /* Amber */ --text-primary: #f1f5f9 /* Near white */ --text-secondary: #94a3b8
-  /* Slate gray */;
-```
-
-All styles are written in **pure CSS and inline React styles** — no Tailwind, no Bootstrap.
-
----
-
-## 🔐 Security
-
-- Passwords hashed with **bcryptjs** before storage
-- All protected routes require a valid **JWT token** in headers
-- Environment variables stored in `.env` — never committed to git
-- Per-user data isolation via unique email-keyed localStorage namespacing
-- `localStorage.clear()` on logout preserves user data, only wipes auth tokens
-
----
-
-## 🗺️ Roadmap
-
-- [ ] Connect all frontend pages to MongoDB backend APIs
-- [ ] Real AI integration (OpenAI API for insights)
-- [ ] Push notifications for bill due dates
-- [ ] Mobile responsive layout
-- [ ] Deploy frontend to Vercel
-- [ ] Deploy backend to Render
-- [ ] Google OAuth login
-- [ ] PDF report generation
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how:
+## Tests
 
 ```bash
-# Fork the repo, then:
-git checkout -b feature/YourFeature
-git commit -m "Add: YourFeature description"
-git push origin feature/YourFeature
-# Open a Pull Request
+cd server && npm test          # 33 API tests, no database required
+cd client && npm test          # UI and API-client tests
 ```
 
----
+## CI/CD
 
-## 👨‍💻 Developer
+- **CI (GitHub Actions, on every push and pull request to `main`):**
+  1. Server: install, run tests, audit production dependencies
+  2. Client: install, run tests, production build
+  3. Docker: build all images, start the full stack with Compose, then check the API health endpoint, the frontend (including a client-side route), and a real register and login against the containerised database
+- **CD:** Vercel (frontend) and Render (API) deploy automatically from `main`.
 
-<div align="center">
+## API overview
 
-**Veda Shiva Prasad**
+All routes except `/api/auth/register` and `/api/auth/login` require `Authorization: Bearer <token>`.
 
-MCA Graduate • Full Stack Developer • MERN Stack
+| Area       | Routes                                                                 |
+| ---------- | ---------------------------------------------------------------------- |
+| Auth       | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`, `PUT /api/auth/profile`, `PUT /api/auth/change-password` |
+| Expenses   | `GET/POST/DELETE /api/expenses`, `DELETE /api/expenses/:id`, `GET /api/expenses/summary` |
+| Budgets    | `GET/POST /api/budgets`, `DELETE /api/budgets/:id`, `GET/PUT /api/budgets/limit` |
+| Goals      | `GET/POST /api/goals`, `PUT/DELETE /api/goals/:id`, `POST /api/goals/:id/add` |
+| Recurring  | `GET/POST /api/recurring`, `PUT/DELETE /api/recurring/:id`             |
+| Owed       | `GET/POST /api/owed`, `PUT /api/owed/:id/settle`, `DELETE /api/owed/:id` |
+| Categories | `GET/POST /api/categories`, `DELETE /api/categories/:name`             |
+| Groups     | `GET/POST /api/groups` (API only, not yet used by the UI)              |
 
-[![GitHub](https://img.shields.io/badge/GitHub-Veda--Shiva--Prasad-181717?style=flat-square&logo=github)](https://github.com/Veda-Shiva-Prasad)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-vedashivaprasad-0A66C2?style=flat-square&logo=linkedin)](https://linkedin.com/in/vedashivaprasad)
+Every query is scoped to the logged-in user, so one user can never read or change another user's data.
 
-</div>
+## Known limitations and roadmap
 
----
+- Group expense splitting is not built yet. The groups API exists, but the UI and per-member split and settle-up logic do not.
+- Per-category budgets use a fixed list of categories and do not yet include custom categories.
+- "Current month" is calculated on the server in UTC, so entries made just after midnight in India can fall into the previous month.
+- Insights are rule-based. Adding an LLM-based summary is a possible future step.
+- Notifications are stored in the browser, not on the server.
 
-## 📝 License
+## Author
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
-
----
-
-<div align="center">
-
-**⭐ If you found this project helpful, please give it a star!**
-
-_It helps others discover the project and keeps me motivated to build more._
-
-Made with ❤️ by **Veda Shiva Prasad** — Hyderabad, India 🇮🇳
-
-</div>
+**Veda Shiva Prasad K** · [GitHub](https://github.com/Veda-Shiva-Prasad) · [LinkedIn](https://linkedin.com/in/vedashivaprasad)

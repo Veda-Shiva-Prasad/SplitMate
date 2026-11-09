@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Plus, X, Archive } from "lucide-react";
 import Navbar from "../components/Navbar.jsx";
 import API from "../utils/api";
-import { useData } from "../context/DataContext";
 
 const priorityColors = { High: "#F43F5E", Medium: "#F59E0B", Low: "#10B981" };
 const iconOptions = [
@@ -23,7 +22,6 @@ const iconOptions = [
 ];
 
 const Goals = ({ isDarkMode, setIsDarkMode }) => {
-  const { goals, refreshData } = useData();
   const [localGoals, setLocalGoals] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showAddMoney, setShowAddMoney] = useState(null);
