@@ -8,7 +8,7 @@ A full-stack personal finance manager built with the MERN stack. Track expenses,
 ![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248?logo=mongodb&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
-**Live app:** https://split-mate-chi.vercel.app (frontend on Vercel, API on Render)
+**Live app:** https://splitmate-finance.vercel.app (frontend on Vercel, API on Render)
 
 > The API runs on a free Render plan, so the first request after a quiet period can take 30+ seconds while the server wakes up.
 
