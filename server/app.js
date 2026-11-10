@@ -1,3 +1,4 @@
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
@@ -14,7 +15,7 @@ const groupRoutes = require("./routes/groupRoutes");
 
 const app = express();
 
-// Trust the hosting platform's proxy when deployed (needed for rate limiting).
+// Trust the hosting platform's proxy when deployed.
 if (process.env.NODE_ENV === "production") {
   app.set("trust proxy", 1);
 }
@@ -24,20 +25,26 @@ app.use(helmet());
 // CORS configuration
 const allowedOrigins = [
   "http://localhost:3000",
+  "https://splitmate-finance.vercel.app",
   "https://split-mate-chi.vercel.app",
 ];
 
+// Support additional frontend URLs through Render environment variables.
 if (process.env.CLIENT_URL) {
   process.env.CLIENT_URL.split(",")
-    .map((url) => url.trim().replace(/\/$/, ""))
+    .map((url) => url.trim().replace(/\/+$/, ""))
     .filter(Boolean)
-    .forEach((url) => allowedOrigins.push(url));
+    .forEach((url) => {
+      if (!allowedOrigins.includes(url)) {
+        allowedOrigins.push(url);
+      }
+    });
 }
 
 app.use(
   cors({
     origin(origin, callback) {
-      // Requests without an Origin header (health checks, server-to-server).
+      // Allow requests without an Origin header, such as health checks.
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
@@ -45,34 +52,41 @@ app.use(
       return callback(new Error("Origin not allowed by CORS."));
     },
     credentials: true,
-  }),
+  })
 );
 
-// Base64-encoded profile photos are larger than the original image.
+// Request body configuration
 app.use(express.json({ limit: "6mb" }));
 app.use(express.urlencoded({ extended: true, limit: "6mb" }));
 
-// Slow down password guessing on login and registration.
+// Authentication rate limiting
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: process.env.NODE_ENV === "test" ? 1000 : 30,
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { message: "Too many attempts. Please try again in a few minutes." },
+  message: {
+    message: "Too many attempts. Please try again in a few minutes.",
+  },
 });
 
-// Health check
+// Health checks
 app.get("/", (req, res) => {
-  res.status(200).json({ message: "SplitMate API is running" });
+  res.status(200).json({
+    message: "SplitMate API is running",
+  });
 });
 
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
+  res.status(200).json({
+    status: "ok",
+  });
 });
 
 // API routes
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
+
 app.use("/api/auth", authRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/budgets", budgetRoutes);
@@ -89,7 +103,7 @@ app.use("/api", (req, res) => {
   });
 });
 
-// Application errors
+// Global error handler
 app.use((err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -102,7 +116,9 @@ app.use((err, req, res, next) => {
   }
 
   if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
-    return res.status(400).json({ message: "Invalid JSON request." });
+    return res.status(400).json({
+      message: "Invalid JSON request.",
+    });
   }
 
   if (err.message === "Origin not allowed by CORS.") {
