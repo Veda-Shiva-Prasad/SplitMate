@@ -135,13 +135,21 @@ All routes except `/api/auth/register` and `/api/auth/login` require `Authorizat
 
 Every query is scoped to the logged-in user, so one user can never read or change another user's data.
 
-## Known limitations and roadmap
+## Product Vision & Future Roadmap
 
-- Group expense splitting is not built yet. The groups API exists, but the UI and per-member split and settle-up logic do not.
-- Per-category budgets use a fixed list of categories and do not yet include custom categories.
-- "Current month" is calculated on the server in UTC, so entries made just after midnight in India can fall into the previous month.
-- Insights are rule-based. Adding an LLM-based summary is a possible future step.
-- Notifications are stored in the browser, not on the server.
+SplitMate is designed to simplify personal finance management through an intuitive, secure and scalable platform. The project brings together everyday expense tracking, budget planning, savings management and financial insights in one unified experience.
+
+### Future Development Roadmap
+
+- **Collaborative Expense Management:** Introduce shared expense tracking, group-based spending and automated settlement calculations.
+- **Smarter Budgeting:** Expand budget customization with flexible category-based limits and personalized spending recommendations.
+- **Global Timezone Support:** Enhance financial reporting and date management for users across different regions.
+- **Advanced Financial Analytics:** Introduce richer visualizations, spending trends, predictive insights and AI-powered financial summaries.
+- **Cross-Device Notifications:** Enable synchronized notifications and activity updates across multiple devices.
+- **Offline-First Experience:** Support offline transaction entry with automatic synchronization when connectivity is restored.
+- **Scalability & Performance:** Continuously improve API performance, database efficiency and application scalability as usage grows.
+
+**Long-Term Vision:** Evolve SplitMate into a comprehensive personal finance platform that makes managing money simpler, smarter and more accessible.
 
 ## Author
 
