@@ -1,12 +1,17 @@
+
 const express = require("express");
 const router = express.Router();
+
 const {
   getRecurring,
   createRecurring,
   updateRecurring,
   deleteRecurring,
 } = require("../controllers/recurringController");
-const { protect } = require("../middleware/authMiddleware");
+
+const {
+  protect,
+} = require("../middleware/authMiddleware");
 
 router.use(protect);
 

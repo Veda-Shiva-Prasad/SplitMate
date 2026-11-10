@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 const Recurring = require("../models/Recurring");
 
@@ -36,15 +37,33 @@ exports.getRecurring = async (req, res) => {
 // POST /api/recurring
 exports.createRecurring = async (req, res) => {
   try {
-    const { name, amount, category, frequency, nextDue, icon } = req.body || {};
+    const {
+      name,
+      amount,
+      category,
+      frequency,
+      nextDue,
+      icon,
+    } = req.body || {};
 
-    if (typeof name !== "string" || !name.trim() || name.trim().length > 100) {
+    const numericAmount = Number(amount);
+
+    if (
+      typeof name !== "string" ||
+      !name.trim() ||
+      name.trim().length > 100
+    ) {
       return res.status(400).json({
-        message: "Enter a name up to 100 characters.",
+        message: "Enter a valid payment name.",
       });
     }
 
-    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
+    if (
+      amount === "" ||
+      amount === undefined ||
+      !Number.isFinite(numericAmount) ||
+      numericAmount <= 0
+    ) {
       return res.status(400).json({
         message: "Amount must be a positive number.",
       });
@@ -62,7 +81,12 @@ exports.createRecurring = async (req, res) => {
       });
     }
 
-    if (!nextDue || Number.isNaN(new Date(nextDue).getTime())) {
+    const parsedDate = new Date(nextDue);
+
+    if (
+      !nextDue ||
+      Number.isNaN(parsedDate.getTime())
+    ) {
       return res.status(400).json({
         message: "Select a valid next due date.",
       });
@@ -71,20 +95,22 @@ exports.createRecurring = async (req, res) => {
     const row = await Recurring.create({
       userId: req.user._id,
       name: name.trim(),
-      amount,
+      amount: numericAmount,
       category,
       frequency,
-      nextDue: new Date(nextDue),
-      icon: typeof icon === "string" ? icon.slice(0, 12) : undefined,
+      nextDue: parsedDate,
+      icon:
+        typeof icon === "string"
+          ? icon.slice(0, 12)
+          : undefined,
     });
 
     return res.status(201).json(row);
   } catch (error) {
     console.error("Create recurring error:", error);
 
-    return res.status(400).json({
-      message:
-        "Unable to create this recurring payment. Check the details and try again.",
+    return res.status(500).json({
+      message: "Unable to create recurring payment.",
     });
   }
 };
@@ -109,79 +135,88 @@ exports.updateRecurring = async (req, res) => {
       });
     }
 
-    const allowed = [
-      "name",
-      "amount",
-      "category",
-      "frequency",
-      "nextDue",
-      "icon",
-    ];
+    const {
+      name,
+      amount,
+      category,
+      frequency,
+      nextDue,
+      icon,
+    } = req.body || {};
 
-    for (const key of allowed) {
-      if (req.body?.[key] === undefined) {
-        continue;
+    if (name !== undefined) {
+      if (
+        typeof name !== "string" ||
+        !name.trim() ||
+        name.trim().length > 100
+      ) {
+        return res.status(400).json({
+          message: "Enter a valid payment name.",
+        });
       }
 
-      const value = req.body[key];
+      row.name = name.trim();
+    }
 
-      if (key === "name") {
-        if (
-          typeof value !== "string" ||
-          !value.trim() ||
-          value.trim().length > 100
-        ) {
-          return res.status(400).json({
-            message: "Enter a valid name.",
-          });
-        }
+    if (amount !== undefined) {
+      const numericAmount = Number(amount);
 
-        row.name = value.trim();
-      } else if (key === "amount") {
-        if (
-          typeof value !== "number" ||
-          !Number.isFinite(value) ||
-          value <= 0
-        ) {
-          return res.status(400).json({
-            message: "Amount must be a positive number.",
-          });
-        }
-
-        row.amount = value;
-      } else if (key === "category") {
-        if (!categories.includes(value)) {
-          return res.status(400).json({
-            message: "Select a valid category.",
-          });
-        }
-
-        row.category = value;
-      } else if (key === "frequency") {
-        if (!frequencies.includes(value)) {
-          return res.status(400).json({
-            message: "Select a valid frequency.",
-          });
-        }
-
-        row.frequency = value;
-      } else if (key === "nextDue") {
-        if (!value || Number.isNaN(new Date(value).getTime())) {
-          return res.status(400).json({
-            message: "Select a valid next due date.",
-          });
-        }
-
-        row.nextDue = new Date(value);
-      } else if (key === "icon") {
-        if (typeof value !== "string") {
-          return res.status(400).json({
-            message: "Invalid icon.",
-          });
-        }
-
-        row.icon = value.slice(0, 12);
+      if (
+        amount === "" ||
+        !Number.isFinite(numericAmount) ||
+        numericAmount <= 0
+      ) {
+        return res.status(400).json({
+          message: "Amount must be a positive number.",
+        });
       }
+
+      row.amount = numericAmount;
+    }
+
+    if (category !== undefined) {
+      if (!categories.includes(category)) {
+        return res.status(400).json({
+          message: "Select a valid category.",
+        });
+      }
+
+      row.category = category;
+    }
+
+    if (frequency !== undefined) {
+      if (!frequencies.includes(frequency)) {
+        return res.status(400).json({
+          message: "Select a valid frequency.",
+        });
+      }
+
+      row.frequency = frequency;
+    }
+
+    if (nextDue !== undefined) {
+      const parsedDate = new Date(nextDue);
+
+      if (
+        !nextDue ||
+        Number.isNaN(parsedDate.getTime())
+      ) {
+        return res.status(400).json({
+          message: "Select a valid next due date.",
+        });
+      }
+
+      row.nextDue = parsedDate;
+    }
+
+    if (icon !== undefined) {
+      if (typeof icon !== "string") {
+        return res.status(400).json({
+          message: "Invalid payment icon.",
+        });
+      }
+
+      row.icon = icon.slice(0, 12);
     }
 
     await row.save();
@@ -190,8 +225,8 @@ exports.updateRecurring = async (req, res) => {
   } catch (error) {
     console.error("Update recurring error:", error);
 
-    return res.status(400).json({
-      message: "Unable to update this recurring payment.",
+    return res.status(500).json({
+      message: "Unable to update recurring payment.",
     });
   }
 };
@@ -217,13 +252,13 @@ exports.deleteRecurring = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Recurring payment deleted.",
+      message: "Recurring payment deleted successfully.",
     });
   } catch (error) {
     console.error("Delete recurring error:", error);
 
     return res.status(500).json({
-      message: "Unable to delete this recurring payment.",
+      message: "Unable to delete recurring payment.",
     });
   }
 };

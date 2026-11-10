@@ -20,8 +20,3 @@ npm-debug.log*
 Thumbs.db
 .vscode/
 .idea/
-
-# Explicitly exclude dependencies
-/server/node_modules/
-/client/node_modules/
-node_modules/

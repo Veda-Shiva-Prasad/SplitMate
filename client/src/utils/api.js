@@ -1,10 +1,12 @@
+
 import axios from "axios";
 
 const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "https://splitmate-0a2j.onrender.com/api";
+  process.env.REACT_APP_API_URL ||
+  "https://splitmate-api-sl0j.onrender.com/api";
 
 const API = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL.replace(/\/+$/, ""),
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
@@ -22,7 +24,7 @@ API.interceptors.request.use(
 
     return config;
   },
-  (error) => Promise.reject(error),
+  (error) => Promise.reject(error)
 );
 
 API.interceptors.response.use(
@@ -35,7 +37,7 @@ API.interceptors.response.use(
       localStorage.removeItem("userEmail");
 
       const isAuthPage = ["/login", "/register"].includes(
-        window.location.pathname,
+        window.location.pathname
       );
 
       if (!isAuthPage) {
@@ -44,7 +46,7 @@ API.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  },
+  }
 );
 
 export default API;

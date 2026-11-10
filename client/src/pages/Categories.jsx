@@ -486,9 +486,8 @@ const Categories = ({ isDarkMode, setIsDarkMode }) => {
                       outerRadius={85}
                       dataKey="value"
                       nameKey="name"
-                      label={({ name, percent }) =>
-                        `${name} (${(percent * 100).toFixed(0)}%)`
-                      }
+                      label={false}
+                      labelLine={false}
                     >
                       {pieData.map((entry) => (
                         <Cell key={entry.name} fill={entry.color} />
